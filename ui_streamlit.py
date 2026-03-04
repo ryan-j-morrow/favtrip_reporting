@@ -9,6 +9,32 @@ from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
 
 
+def _redirect_base() -> str:
+    """
+    Return a non-empty redirect URI base for OAuth. Prefer an explicit value
+    from secrets; fall back to request.url_root if available; ensure exactly
+    one trailing slash so it matches the URI registered in Google Cloud.
+    """
+    # 1) Prefer explicit setting from secrets (most reliable on Streamlit Cloud)
+    base = st.secrets.get("APP_BASE_URL", "").strip()
+    if base:
+        return base.rstrip("/") + "/"
+
+    # 2) Fallback: derive from the request (may be empty on first render)
+    try:
+        req = st.request.url_root  # available in recent Streamlit
+        if req:
+            return req.rstrip("/") + "/"
+    except Exception:
+        pass
+
+    # 3) Last resort: hardcode your app URL here (optional)
+    # return "https://favtripreporting-dev1.streamlit.app/"
+
+    # If we get here, we have no valid base; block with a friendly error.
+    st.error("OAuth redirect base URL is not set. Define APP_BASE_URL in Secrets.")
+    st.stop()
+
 
 def app_base_url():
     # Works on Streamlit Cloud; returns https://<your-app>.streamlit.app
@@ -21,28 +47,32 @@ def app_base_url():
         base = ""
     return base
 
+
 def start_web_oauth(scopes):
-    import streamlit as st
-    cfg = json.loads(st.secrets["GOOGLE_CREDENTIALS"])  # the full JSON pasted in Secrets
-    flow = Flow.from_client_config(cfg, scopes=scopes, redirect_uri=app_base_url())
+    cfg = json.loads(st.secrets["GOOGLE_CREDENTIALS"])
+    redirect = _redirect_base()  # always non-empty, normalized with trailing slash
+    flow = Flow.from_client_config(cfg, scopes=scopes, redirect_uri=redirect)
     auth_url, state = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
         prompt="consent",
     )
     st.session_state["_oauth_state"] = state
+    # Persist the client config *and* the redirect used so finish uses the exact same URI
     st.session_state["_oauth_cfg"] = cfg
+    st.session_state["_oauth_redirect"] = redirect
     return auth_url
 
 def finish_web_oauth(code, state, scopes):
-    import streamlit as st
     cfg = st.session_state.get("_oauth_cfg") or json.loads(st.secrets["GOOGLE_CREDENTIALS"])
-    flow = Flow.from_client_config(cfg, scopes=scopes, redirect_uri=app_base_url())
+    redirect = st.session_state.get("_oauth_redirect") or _redirect_base()
+    flow = Flow.from_client_config(cfg, scopes=scopes, redirect_uri=redirect)
     flow.fetch_token(code=code)
     creds = flow.credentials
     with open("token.json", "w") as f:
         f.write(creds.to_json())
     return creds
+
 
 
 from favtrip.config import Config
