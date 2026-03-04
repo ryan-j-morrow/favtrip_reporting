@@ -363,7 +363,8 @@ if not st.session_state.auth_required:
             def _runner():
                 try:
                     result_holder["value"] = run_pipeline(cfg, logger=logger)
-                except Exception as e:
+                # Catch BaseException so SystemExit / KeyboardInterrupt are captured too
+                except BaseException as e:
                     result_holder["error"] = e
 
             t0 = time.perf_counter()
@@ -373,7 +374,6 @@ if not st.session_state.auth_required:
             with st.status("Running pipeline…", expanded=True) as status:
                 timer_ph = st.empty()
                 lastlog_ph = st.empty()
-
                 while th.is_alive():
                     elapsed = int(time.perf_counter() - t0)
                     timer_ph.markdown(f"**Elapsed:** `{elapsed//3600:02d}:{(elapsed%3600)//60:02d}:{elapsed%60:02d}`")
@@ -387,18 +387,28 @@ if not st.session_state.auth_required:
 
                 if result_holder["error"]:
                     st.error(f"Run failed: {result_holder['error']}")
+                    # Optional during debugging: show stack trace (remove later for a cleaner UI)
+                    try:
+                        st.exception(result_holder["error"])
+                    except Exception:
+                        pass
                     status.update(label="❌ Failed", state="error")
                 else:
                     result = result_holder["value"]
-                    st.write("### Outputs")
-                    col1, col2, col3 = st.columns(3)
-                    col1.metric("Location", result.location)
-                    col2.metric("Timestamp", result.timestamp)
-                    mm = result.elapsed_seconds
-                    col3.metric("Elapsed", f"{mm//3600:02d}:{(mm%3600)//60:02d}:{mm%60:02d}")
-                    if result.manager_pdf_link:
-                        st.success(f"Manager PDF: {result.manager_pdf_link}")
-                    if result.full_order_link:
-                        st.success(f"Full Order Sheet: {result.full_order_link}")
-                    # Note: intentionally NOT showing the full live log post-run
-                    status.update(label="✅ Completed", state="complete")
+                    if result is None:
+                        st.error("Run finished without returning a result. Check logs and inputs (IDs, Drive access).")
+                        status.update(label="⚠️ No result", state="error")
+                    else:
+                        st.write("### Outputs")
+                        col1, col2, col3 = st.columns(3)
+                        col1.metric("Location", result.location)
+                        col2.metric("Timestamp", result.timestamp)
+                        mm = result.elapsed_seconds
+                        col3.metric("Elapsed", f"{mm//3600:02d}:{(mm%3600)//60:02d}:{mm%60:02d}")
+
+                        if getattr(result, "manager_pdf_link", None):
+                            st.success(f"Manager PDF: {result.manager_pdf_link}")
+                        if getattr(result, "full_order_link", None):
+                            st.success(f"Full Order Sheet: {result.full_order_link}")
+
+                        status.update(label="✅ Completed", state="complete")

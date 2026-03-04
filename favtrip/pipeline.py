@@ -91,7 +91,7 @@ def run_pipeline(cfg: Config, logger=None) -> RunResult:
         logger.info("Finding latest incoming spreadsheet…")
     latest = find_latest_sheet(drive_svc, cfg.INCOMING_FOLDER_ID)
     if not latest:
-        raise SystemExit("No incoming report found.")
+        raise RuntimeError("No incoming report found.")
     new_report_id = latest["id"]
     if logger:
         logger.info(f"Latest incoming: {latest['name']} ({new_report_id})")
