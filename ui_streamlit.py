@@ -221,7 +221,8 @@ if "code" in params and "state" in params:
         st.rerun()
     except Exception as e:
         st.error(f"OAuth error: {e}")
-
+if load_valid_token(cfg.SCOPES):
+    cfg = Config.load()
 
 # ----------------------------
 # Session state: auth gating
