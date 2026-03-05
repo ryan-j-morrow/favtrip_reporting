@@ -153,6 +153,8 @@ st.title("🧾 FavTrip Reporting Pipeline")
 
 cfg = Config.load()
 
+#Old Config Diagonistics
+"""
 with st.expander("🔎 Config diagnostics", expanded=False):
     try:
         CONFIG_FILE_ID = (st.secrets.get("CONFIG_FILE_ID", "") or "").strip()
@@ -211,7 +213,7 @@ with colB:
         "TIMESTAMP_TZ": cfg.TIMESTAMP_TZ,
         "TIMESTAMP_FMT": cfg.TIMESTAMP_FMT,
     }, language="json")
-
+"""
 params = st.query_params  # Streamlit >=1.31; for older use st.experimental_get_query_params()
 if "code" in params and "state" in params:
     try:
