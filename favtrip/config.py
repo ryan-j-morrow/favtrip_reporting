@@ -216,6 +216,7 @@ class Config:
     DEFAULT_ORDER_RECIPIENTS: List[str] = None
     INCLUDE_FULL_ORDER_IN_EACH_REPORT_KEY_EMAIL: bool = False
     SEND_SEPARATE_FULL_ORDER_EMAIL: bool = True
+    EMAIL_MANGER_REPORT: bool = True
 
     # Google API
     SCOPES: List[str] = None
