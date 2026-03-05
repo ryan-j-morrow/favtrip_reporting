@@ -238,34 +238,12 @@ if "auth_checked" not in st.session_state:
 
 # Sidebar controls (always visible)
 with st.sidebar:
-    st.header("Defaults (.env)")
+    st.header("Utilities")
 
-    if st.button("Force Google Re-Auth", type="secondary", use_container_width=True):
+    if st.button("Google Sign Out", type="secondary", use_container_width=True):
         clear_token()
-        try:
-            # Prefer auto flow
-            from favtrip.google_client import login_via_local_server
-            with st.status("Re-auth in progress (browser will open)…", expanded=True):
-                creds = login_via_local_server(cfg.SCOPES, cfg.REDIRECT_PORT)
-                st.success("✅ Re-auth complete.")
-            st.session_state.auth_required = False
-            st.rerun()
-        except Exception as e:
-            # Fallback to manual method
-            try:
-                flow, url = start_oauth(cfg.SCOPES, cfg.REDIRECT_PORT)
-                st.session_state.oauth_flow = flow
-                st.session_state.oauth_url = url
-                st.session_state.auth_required = True  # show the auth panel
-                st.info("Auto re-auth failed; showing manual method. Open the URL shown in the Authentication panel.")
-                st.rerun()
-            except Exception as e2:
-                st.error(f"Failed to start re-auth: {e2}")
+        _rerun
 
-    # Developer mode (suppresses console prints when unchecked)
-    dev_mode = st.checkbox("Run in developer mode", value=False)
-
-    st.markdown("Edit values for this *one run*. Optionally tick **Update .env** to persist.")
 
 # ----------------------------
 # Authentication panel (shown only if auth required)
@@ -283,8 +261,11 @@ if st.session_state.auth_required:
         if st.button("Sign in with Google"):
             try:
                 auth_url = start_web_oauth(cfg.SCOPES)
-                st.link_button("Open Google Authorization", auth_url, use_container_width=True)
-                st.info("After allowing access, you'll be redirected back here automatically.")
+                # Auto-redirect the current tab (no extra click)
+                st.markdown(
+                    f'<meta http-equiv="refresh" content="0; url={auth_url}">',
+                    unsafe_allow_html=True
+                )
             except Exception as e:
                 st.error(f"Failed to start OAuth: {e}")
 
@@ -481,7 +462,7 @@ if not st.session_state.auth_required:
         else:
             # --- Live run with timer + last log (no full log after completion) ---
             # Write all logs to last_run.log; overwrite on each run
-            logger = StatusLogger(print_to_console=dev_mode, file_path="last_run.log", overwrite=True)
+            logger = StatusLogger(print_to_console=True, file_path="last_run.log", overwrite=True)
             result_holder = {"value": None, "error": None}
 
             def _runner():
