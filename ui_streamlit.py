@@ -19,6 +19,9 @@ from google.oauth2.credentials import Credentials
 from favtrip.google_client import load_valid_token, services
 from favtrip.config_store import load_config_from_drive
 
+from streamlit.components.v1 import html
+from streamlit.components.v1 import html as _html_msg
+
 
 def _b64url(b: bytes) -> str:
     return base64.urlsafe_b64encode(b).rstrip(b"=").decode("ascii")
@@ -129,12 +132,33 @@ from favtrip.google_client import (
 def _rerun():
     # Works on Streamlit >= 1.27 (st.rerun) and older (experimental_rerun)
     try:
-        import streamlit as st
         st.rerun()
     except AttributeError:
         st.experimental_rerun()
 
 st.set_page_config(page_title="FavTrip Reporting Pipeline", page_icon="🧾", layout="wide")
+
+_html_msg(
+    """
+    <script>
+      (function() {
+        // Avoid adding multiple listeners on reruns
+        if (window.__favtrip_oauth_listener_added) return;
+        window.__favtrip_oauth_listener_added = true;
+
+        window.addEventListener("message", function(ev) {
+          try {
+            if (ev && ev.data && ev.data.type === "favtrip_oauth_done") {
+              // Reload the page to pick up the new token and Drive-backed defaults
+              window.location.reload();
+            }
+          } catch (e) { /* no-op */ }
+        }, false);
+      })();
+    </script>
+    """,
+    height=0,
+)
 
 # --- Larger Run button ---
 st.markdown(
@@ -214,13 +238,29 @@ def hide():
             "TIMESTAMP_FMT": cfg.TIMESTAMP_FMT,
         }, language="json")
     
-params = st.query_params  # Streamlit >=1.31; for older use st.experimental_get_query_params()
+params = st.query_params
 if "code" in params and "state" in params:
     try:
         finish_web_oauth(params["code"], params["state"], cfg.SCOPES)
         st.success("✅ Google authentication complete.")
-        st.query_params.clear()  # avoid reusing on refresh
-        st.rerun()
+        st.query_params.clear()
+        # NEW: tell the opener to refresh and then close the popup
+        html(
+            """
+            <script>
+              try {
+                if (window.opener && !window.opener.closed) {
+                  window.opener.postMessage({type: "favtrip_oauth_done"}, "*");
+                }
+              } catch (e) {}
+              // Close this popup
+              window.close();
+            </script>
+            """,
+            height=0,
+        )
+        # Fallback: in case the browser blocks close(), allow manual continue
+        st.caption("You can close this window if it didn't close automatically.")
     except Exception as e:
         st.error(f"OAuth error: {e}")
 if load_valid_token(cfg.SCOPES):
@@ -264,15 +304,28 @@ if st.session_state.auth_required:
         if st.button("Sign in with Google"):
             try:
                 auth_url = start_web_oauth(cfg.SCOPES)
+
+                # Open Google auth in a popup window (NOT a new tab via link_button).
+                # NOTE: do NOT use `noopener` if you plan to call window.opener in the popup.
                 from streamlit.components.v1 import html
                 html(
                     f"""
                     <script>
-                    window.top.location.href = {json.dumps(auth_url)};
+                    (function() {{
+                        const url = {json.dumps(auth_url)};
+                        const w = window.open(
+                        url,
+                        "favtrip_oauth_popup",
+                        "width=500,height=700,menubar=no,toolbar=no,location=no,status=no"
+                        );
+                        if (w) {{ w.focus(); }}
+                    }})();
                     </script>
                     """,
                     height=0,
                 )
+
+                st.info("A sign‑in popup was opened. Complete consent there; this page will refresh automatically.")
             except Exception as e:
                 st.error(f"Failed to start OAuth: {e}")
 
