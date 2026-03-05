@@ -108,7 +108,6 @@ class Config:
     REDIRECT_PORT: int = 58285
     HTTP_TIMEOUT_SECONDS: int = 300
 
-    from __future__ import annotations
 
 import os
 import json
