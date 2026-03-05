@@ -205,14 +205,21 @@ def run_pipeline(cfg: Config, logger=None) -> RunResult:
         if logger:
             logger.info(f"Emailed {tag}")
 
-    # Step 4E: Send Manager Report
+    # Step 4E: Send Manager Report (guarded by cfg.EMAIL_MANAGER_REPORT)
+    if getattr(cfg, "EMAIL_MANAGER_REPORT", True):
+        to_list = _fallback_recipients("Manager Report (TO_RECIPIENTS)", cfg.TO_RECIPIENTS)
+        cc_list = _clean_emails(cfg.CC_RECIPIENTS)
+        email_manager_report(
+            gmail_svc, "me", to_list, cc_list,
+            pdf_name, pdf_bytes, manager_link, ts, location
+        )
+        if logger:
+            logger.info("Manager email sent")
+    else:
+        if logger:
+            logger.info("Manager email skipped by configuration (EMAIL_MANAGER_REPORT = False)")
 
-    to_list = _fallback_recipients("Manager Report (TO_RECIPIENTS)", cfg.TO_RECIPIENTS)
-    cc_list = _clean_emails(cfg.CC_RECIPIENTS)
-    email_manager_report(gmail_svc, "me", to_list, cc_list, pdf_name, pdf_bytes, manager_link, ts, location)
     
-    if logger:
-        logger.info("Manager email sent")
 
     # Step 4F: Send Full Order if needed
     full_link = full_created.get('webViewLink')

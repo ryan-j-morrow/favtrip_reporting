@@ -101,6 +101,7 @@ class Config:
     DEFAULT_ORDER_RECIPIENTS: List[str] = None
     INCLUDE_FULL_ORDER_IN_EACH_REPORT_KEY_EMAIL: bool = False
     SEND_SEPARATE_FULL_ORDER_EMAIL: bool = True
+    EMAIL_MANAGER_REPORT: bool = True
 
     # Google API
     SCOPES: List[str] = None
@@ -253,6 +254,10 @@ class Config:
             ),
             SEND_SEPARATE_FULL_ORDER_EMAIL=_coerce_bool(
                 _get_secret("SEND_SEPARATE_FULL_ORDER_EMAIL", "true")
+            ),
+
+            EMAIL_MANAGER_REPORT=_coerce_bool(
+                _get_secret("EMAIL_MANAGER_REPORT", "true")
             ),
 
             SCOPES=_coerce_csv(

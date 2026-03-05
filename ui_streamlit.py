@@ -509,7 +509,7 @@ if not st.session_state.auth_required:
         # ===== Email Behavior (two toggles in one row) =====
         with st.container():
             st.markdown("##### Email Behavior")
-            cole1, cole2 = st.columns([1, 1])
+            cole1, cole2, cole3 = st.columns([1, 1, 1])
             with cole1:
                 include_full = st.toggle(
                     "Attach FULL order in each email",
@@ -520,6 +520,13 @@ if not st.session_state.auth_required:
                     "Send separate FULL order email",
                     value=cfg.SEND_SEPARATE_FULL_ORDER_EMAIL
                 )
+            with cole3:                
+                email_mgr = st.toggle(
+                    "Email Manager Report",
+                    value=getattr(cfg, "EMAIL_MANAGER_REPORT", True),
+                    help="When ON, the Manager Report email is sent. When OFF, it is skipped."
+                )
+
 
         # ===== Put optional editors/switches in cards for light framing =====
         st.markdown('<div class="ft-card">', unsafe_allow_html=True)
@@ -601,6 +608,7 @@ if not st.session_state.auth_required:
 
         cfg.INCLUDE_FULL_ORDER_IN_EACH_REPORT_KEY_EMAIL = include_full
         cfg.SEND_SEPARATE_FULL_ORDER_EMAIL = send_full
+        cfg.EMAIL_MANAGER_REPORT = bool(email_mgr)
 
         cfg.CALC_SPREADSHEET_ID = calc_id
         cfg.INCOMING_FOLDER_ID = incoming_id
