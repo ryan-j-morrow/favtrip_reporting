@@ -264,10 +264,14 @@ if st.session_state.auth_required:
         if st.button("Sign in with Google"):
             try:
                 auth_url = start_web_oauth(cfg.SCOPES)
-                # Auto-redirect the current tab (no extra click)
-                st.markdown(
-                    f'<meta http-equiv="refresh" content="0; url={auth_url}">',
-                    unsafe_allow_html=True
+                from streamlit.components.v1 import html
+                html(
+                    f"""
+                    <script>
+                    window.top.location.href = {json.dumps(auth_url)};
+                    </script>
+                    """,
+                    height=0,
                 )
             except Exception as e:
                 st.error(f"Failed to start OAuth: {e}")
