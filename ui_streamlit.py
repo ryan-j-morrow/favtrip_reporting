@@ -196,52 +196,47 @@ st.set_page_config(page_title="FavTrip Reporting Pipeline", page_icon="🧾", la
 
 # --- Larger Run button ---
 # --- REPLACE existing CSS block with this compact style ---
-# --- ADD / MERGE: Big, right-aligned "Run Pipeline" button styles ---
+# --- ADD / MERGE THIS CSS FOR THE RUN BUTTON ---
+
 st.markdown(
     """
     <style>
-      /* Ensure the submit container in our header aligns to the right */
-      .ft-runwrap {
+    
+    /* Right-align the run button in its column */
+    .ft-runwrap {
         display: flex;
         justify-content: flex-end;
-        align-items: center;
-      }
+        width: 100%;
+    }
 
-      /* Style ONLY the form submit button (safe selector Streamlit uses for submit) */
-      div[data-testid="stFormSubmitButton"] button {
-        font-size: 1.15rem;      /* bigger text */
-        font-weight: 600;         /* bolder text */
-        padding: 0.85rem 1.35rem; /* bigger hit area */
-        border-radius: 10px;      /* pill-ish corners */
-        box-shadow: 0 1px 2px rgba(0,0,0,0.08);
-      }
+    /* Target ONLY the submit button used by st.form */
+    div[data-testid="stFormSubmitButton"] button {
+        background-color: #1a73e8 !important;   /* BLUE */
+        color: white !important;                /* WHITE TEXT */
+        font-size: 1.20rem !important;          /* BIGGER TEXT */
+        font-weight: 600 !important;            /* BOLD */
+        padding: 0.90rem 2.0rem !important;     /* LONGER BUTTON */
+        border-radius: 10px !important;         /* SOFT CORNERS */
+        border: none !important;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+        width: 100%;                            /* STRETCH INSIDE BUTTON WRAP */
+        text-align: center;
+    }
 
-      /* Optional: make the button more prominent with a stronger accent color */
-      div[data-testid="stFormSubmitButton"] button[kind="primary"] {
-        background: var(--primary-color);
-        color: white;
-      }
+    /* Hover and active states */
+    div[data-testid="stFormSubmitButton"] button:hover {
+        filter: brightness(0.93);
+    }
+    div[data-testid="stFormSubmitButton"] button:active {
+        transform: translateY(1px);
+    }
 
-      /* On wider screens, keep the submit container tight to the right edge */
-      @media (min-width: 900px) {
-        div[data-testid="stFormSubmitButton"] {
-          width: 100%;
-          display: flex;
-          justify-content: flex-end;
-        }
-      }
-
-      /* Optional hover/active states */
-      div[data-testid="stFormSubmitButton"] button:hover {
-        filter: brightness(0.96);
-      }
-      div[data-testid="stFormSubmitButton"] button:active {
-        transform: translateY(0.5px);
-      }
     </style>
     """,
     unsafe_allow_html=True
 )
+
+# --- END CSS ---
 # --- END ADD / MERGE ---
 
 st.title("🧾 FavTrip Reporting Pipeline")
@@ -462,20 +457,21 @@ if not st.session_state.auth_required:
         
 
         
-        hdr_left, hdr_right = st.columns([1, 0.36])
+        
+        header_left, header_right = st.columns([1, 0.32])
 
-        with hdr_left:
+        with header_left:
             st.subheader("Run Options")
             st.caption("Configure email behavior and report keys. Use **Advanced** for IDs/GIDs/timezone.")
 
-        with hdr_right:
-            # A small wrapper so the button is visually anchored to the right edge
+        with header_right:
             st.markdown('<div class="ft-runwrap">', unsafe_allow_html=True)
             submitted = st.form_submit_button(
-                "▶️ Run Pipeline",
-                help="Start the pipeline with the options configured in this form."
+                "Run Pipeline",  # NO ICON
+                help="Start the pipeline"
             )
             st.markdown('</div>', unsafe_allow_html=True)
+
 
 
         # --- Main options ---
