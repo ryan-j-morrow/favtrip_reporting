@@ -122,19 +122,24 @@ from typing import Any, Dict
 # Helpers: read from Streamlit secrets (typed) or .env (strings) and coerce
 # -----------------------------------------------------------------------------
 
-def _get_secret(key: str, default: str = ""):
+
+def _get_secret(key: str, default: Any = None) -> Any:
     """
-    Prefer Streamlit secrets (typed TOML values), else fall back to environment.
-    Returns the raw value from st.secrets (could be bool/list/dict/str) or a str from env.
+    Read from Streamlit secrets if present, else env var, else default.
+    Does not raise if key missing; returns `default`.
     """
+    # Try Streamlit secrets (if running inside Streamlit with secrets configured)
     try:
-        import streamlit as st  # imported lazily so local CLI still works
-        val = st.secrets.get(key, None)
-        if val is None:
-            return os.getenv(key, default)
-        return val
+        import streamlit as st  # imported lazily to avoid hard dependency
+        if hasattr(st, "secrets") and key in st.secrets:
+            return st.secrets.get(key, default)
     except Exception:
-        return os.getenv(key, default)
+        pass
+
+    # Fallback to environment variables (including those loaded by dotenv)
+    val = os.getenv(key, default)
+    return val
+
 
 
 _TRUE = {"1", "true", "yes", "on", "y", "t"}
