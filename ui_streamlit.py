@@ -242,7 +242,10 @@ with st.sidebar:
 
     if st.button("Google Sign Out", type="secondary", use_container_width=True):
         clear_token()
-        _rerun
+        for key in ["auth_required", "oauth_flow", "oauth_url", "auth_checked"]:
+            if key in st.session_state:
+                del st.session_state[key]
+        _rerun()
 
 
 # ----------------------------
