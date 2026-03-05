@@ -3,10 +3,8 @@ from __future__ import annotations
 import io
 import json
 from typing import Any, Dict, Optional
-from googleapiclient.http import MediaIoBaseUpload
 from googleapiclient.discovery import Resource
-
-# Minimal, explicit scope: we already request Drive scope in your SCOPES list.
+from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
 
 DEFAULT_CONFIG_FILENAME = "favtrip_config.json"
 DEFAULT_MIMETYPE = "application/json"
@@ -15,10 +13,10 @@ def load_config_from_drive(drive: Resource, file_id: Optional[str] = None) -> Di
     """
     Read the JSON config stored in Google Drive.
     If file_id is None, try to discover the newest file named DEFAULT_CONFIG_FILENAME.
-    Returns {} if the file doesn't exist or is empty.
+    Returns {} if the file doesn't exist or is empty/invalid JSON.
     """
+    # Discover by name if a specific id wasn't provided
     if not file_id:
-        # Discover by name (newest wins)
         resp = drive.files().list(
             q=f"name='{DEFAULT_CONFIG_FILENAME}' and mimeType='{DEFAULT_MIMETYPE}' and trashed=false",
             orderBy="modifiedTime desc",
@@ -30,13 +28,15 @@ def load_config_from_drive(drive: Resource, file_id: Optional[str] = None) -> Di
             return {}
         file_id = files[0]["id"]
 
-    # Download file content
-    buf = io.BytesIO()
+    # Stream download the file
     request = drive.files().get_media(fileId=file_id)
-    downloader = __import__("googleapiclient.http").apiclient.http.MediaIoBaseDownload(buf, request)
+    buf = io.BytesIO()
+    downloader = MediaIoBaseDownload(buf, request)
+
     done = False
     while not done:
         status, done = downloader.next_chunk()
+
     raw = buf.getvalue().decode("utf-8", errors="replace").strip()
     if not raw:
         return {}
@@ -45,11 +45,16 @@ def load_config_from_drive(drive: Resource, file_id: Optional[str] = None) -> Di
     except Exception:
         return {}
 
-def save_config_to_drive(drive: Resource, data: Dict[str, Any], file_id: Optional[str] = None, parent_folder_id: Optional[str] = None) -> str:
+def save_config_to_drive(
+    drive: Resource,
+    data: Dict[str, Any],
+    file_id: Optional[str] = None,
+    parent_folder_id: Optional[str] = None
+) -> str:
     """
     Write JSON config to Google Drive.
     - If file_id provided, update that file.
-    - Else create (or replace by name) DEFAULT_CONFIG_FILENAME in optional parent folder.
+    - Else upsert (update if found by name, otherwise create) DEFAULT_CONFIG_FILENAME.
     Returns the Drive file ID.
     """
     payload = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
