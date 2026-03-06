@@ -261,77 +261,73 @@ def render_run_form(cfg):
     # =========================
     # UPLOAD CARD (outside form)
     # =========================
-    st.markdown('<div class="ft-card">', unsafe_allow_html=True)
-    st.markdown("#### Upload Current Week Sales Report")
+    
+    with st.container(border=True):
+        st.subheader("Upload Current Week Sales Report")
+        # Use the SAME column grid as the run form header: [4, 1, 1]
+        up_col, _, upbtn_col = st.columns([4, 1, 1])
 
-    # Use the SAME column grid as the run form header: [4, 1, 1]
-    up_col, _, upbtn_col = st.columns([4, 1, 1])
+        with up_col:
+            incoming_file = st.file_uploader(
+                "Upload Current Week Sales Report",
+                type=["xlsx", "csv"],
+                key=uploader_key,
+                help="Please upload the current week's 'Live Items Report' from Modisoft as an XLSX or CSV file.",
+                label_visibility="collapsed",
+                accept_multiple_files=False,
+            )
 
-    with up_col:
-        incoming_file = st.file_uploader(
-            "Upload Current Week Sales Report",
-            type=["xlsx", "csv"],
-            key=uploader_key,
-            help="Please upload the current week's 'Live Items Report' from Modisoft as an XLSX or CSV file.",
-            label_visibility="collapsed",
-            accept_multiple_files=False,
-        )
+        # Track selection to manage gating (must click Upload Now successfully before Run)
+        file_selected = incoming_file is not None
+        if file_selected and st.session_state.get("incoming_selected_name") != incoming_file.name:
+            st.session_state.incoming_selected_name = incoming_file.name
+            st.session_state.incoming_uploaded_ok = False
 
-    # Track selection to manage gating (must click Upload Now successfully before Run)
-    file_selected = incoming_file is not None
-    if file_selected and st.session_state.get("incoming_selected_name") != incoming_file.name:
-        st.session_state.incoming_selected_name = incoming_file.name
-        st.session_state.incoming_uploaded_ok = False
+        with upbtn_col:
+            st.markdown('<div class="ft-right-btn">', unsafe_allow_html=True)
+            upload_clicked = st.button(
+                "⬆️ Upload Now",
+                use_container_width=True,
+                disabled=(not file_selected),
+                type="secondary",
+                key="upload_submit",
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
 
-    with upbtn_col:
-        # Ensure full-width alignment like the Run button
-        st.markdown('<div class="ft-right-btn">', unsafe_allow_html=True)
-        upload_clicked = st.button(
-            "⬆️ Upload Now",
-            use_container_width=True,
-            disabled=(not file_selected),
-            type="secondary",
-            key="upload_submit",
-        )
-        st.markdown('</div>', unsafe_allow_html=True)
+        # --- Handle the upload action immediately ---
+        if upload_clicked:
+            if not cfg.INCOMING_FOLDER_ID:
+                st.error("Incoming Folder ID is empty. Set it under **Advanced → Incoming Folder ID**.")
+            elif incoming_file is None:
+                st.warning("Choose a .xlsx or .csv file first.")
+            else:
+                try:
+                    drive = _get_drive_service_or_raise(cfg)
+                    media_mime = _infer_media_mime(incoming_file.name)
+                    base_name = os.path.splitext(incoming_file.name)[0]
+                    nice_name = f"{base_name} (uploaded via UI)"
+                    created = upload_to_drive(
+                        drive,
+                        data=incoming_file.getvalue(),
+                        name=nice_name,
+                        mime=media_mime,
+                        folder_id=cfg.INCOMING_FOLDER_ID,
+                        to_sheet=True,
+                    )
+                    link = created.get("webViewLink", "")
 
-    # --- Handle the upload action immediately ---
-    if upload_clicked:
-        if not cfg.INCOMING_FOLDER_ID:
-            st.error("Incoming Folder ID is empty. Set it under **Advanced → Incoming Folder ID**.")
-        elif incoming_file is None:
-            st.warning("Choose a .xlsx or .csv file first.")
-        else:
-            try:
-                drive = _get_drive_service_or_raise(cfg)
-                media_mime = _infer_media_mime(incoming_file.name)
-                base_name = os.path.splitext(incoming_file.name)[0]
-                nice_name = f"{base_name} (uploaded via UI)"
-                created = upload_to_drive(
-                    drive,
-                    data=incoming_file.getvalue(),
-                    name=nice_name,
-                    mime=media_mime,
-                    folder_id=cfg.INCOMING_FOLDER_ID,
-                    to_sheet=True,
-                )
-                link = created.get("webViewLink", "")
+                    st.session_state.incoming_uploaded_ok = True
+                    st.session_state.incoming_uploader_version += 1
+                    st.session_state.incoming_selected_name = None
 
-                st.session_state.incoming_uploaded_ok = True
+                    st.success("✅ Uploaded to Incoming as a Google Sheet.")
+                    if link:
+                        st.link_button("Open uploaded Sheet", link, use_container_width=True)
+                    st.caption("This will be treated as the latest incoming report on the next run.")
+                    _rerun()
+                except Exception as e:
+                    st.error(f"Upload failed: {e}")
 
-                # Reset uploader: bump version so key changes and the widget resets on rerun
-                st.session_state.incoming_uploader_version += 1
-                st.session_state.incoming_selected_name = None
-
-                st.success("✅ Uploaded to Incoming as a Google Sheet.")
-                if link:
-                    st.link_button("Open uploaded Sheet", link, use_container_width=True)
-                st.caption("This will be treated as the latest incoming report on the next run.")
-                _rerun()
-            except Exception as e:
-                st.error(f"Upload failed: {e}")
-
-    st.markdown('</div>', unsafe_allow_html=True)  # end .ft-card (UPLOAD)
 
     # =========================
     # RUN FORM CARD
