@@ -655,15 +655,15 @@ def render_auth_panel(cfg):
             
             html(f"""
             <script>
-            // Open the OAuth tab (keep 'noopener' for safety)
-            window.open({json.dumps(auth_url)}, "_blank", "noopener");
+                // Open the OAuth tab (keep 'noopener' for safety)
+                window.open({json.dumps(auth_url)}, "_blank", "noopener");
 
-            // When the user comes back to this tab, refresh once to pick up token.json
-            document.addEventListener("visibilitychange", function() {
-                try {
-                if (!document.hidden) { location.reload(); }
-                } catch(_) {}
-            });
+                // When the user comes back to this tab, refresh once to pick up token.json
+                document.addEventListener("visibilitychange", function() {
+                    try {
+                        if (!document.hidden) { location.reload(); }
+                    } catch(_) {}
+                });
             </script>
             """, height=0)
 
@@ -687,15 +687,15 @@ def render_sidebar():
                 
                 html(f"""
                 <script>
-                // Open the OAuth tab (keep 'noopener' for safety)
-                window.open({json.dumps(auth_url)}, "_blank", "noopener");
+                    // Open the OAuth tab (keep 'noopener' for safety)
+                    window.open({json.dumps(auth_url)}, "_blank", "noopener");
 
-                // When the user comes back to this tab, refresh once to pick up token.json
-                document.addEventListener("visibilitychange", function() {
-                    try {
-                    if (!document.hidden) { location.reload(); }
-                    } catch(_) {}
-                });
+                    // When the user comes back to this tab, refresh once to pick up token.json
+                    document.addEventListener("visibilitychange", function() {
+                        try {
+                            if (!document.hidden) { location.reload(); }
+                        } catch(_) {}
+                    });
                 </script>
                 """, height=0)
 
