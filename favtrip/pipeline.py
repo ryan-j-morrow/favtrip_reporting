@@ -138,15 +138,14 @@ def run_pipeline(cfg: Config, logger=None) -> RunResult:
     if logger:
         logger.info(f"Uploaded Manager PDF: {manager_link}")
 
-    # Step 4B: Master Order CSV
+    # Step 4B: Master Order XLSX
     if logger:
-        logger.info("Exporting Master Order (CSV)…")
+        logger.info("Exporting Master Order (XLSX)…")
     master_xlsx_bytes = export_sheet(creds, cfg.CALC_SPREADSHEET_ID, cfg.GID_ORDER_CSV, "xlsx")
 
     # Step 4C: Full order upload (XLSX) and export (PDF)
-    full_xlsx = export_sheet(creds, cfg.CALC_SPREADSHEET_ID, cfg.GID_ORDER_CSV, "xlsx")
     full_xlsx_name = f"Order_Report_{ts}_{location}_FULL.xlsx"
-    full_created = upload_to_drive(drive_svc, full_xlsx, full_xlsx_name, XLSX_MIME, cfg.ORDER_REPORT_FOLDER_ID, to_sheet=True)
+    full_created = upload_to_drive(drive_svc, master_xlsx_bytes, full_xlsx_name, XLSX_MIME, cfg.ORDER_REPORT_FOLDER_ID, to_sheet=True)
     full_file_id = full_created["id"]
     full_gid = first_gid(sheets_svc, full_file_id)
     full_pdf = export_sheet(creds, full_file_id, full_gid, "pdf")
