@@ -447,217 +447,217 @@ def render_run_form(cfg):
 
         # ----- Submission handling -----
         def _split_emails(csv_str: str):
-        return [e.strip() for e in (csv_str or "").split(",") if e.strip()]
+            return [e.strip() for e in (csv_str or "").split(",") if e.strip()]
 
-    if submitted:
-        # Apply per-run config
-        cfg.TO_RECIPIENTS = _split_emails(to)
-        cfg.CC_RECIPIENTS = _split_emails(cc)
-        cfg.USE_ALL_REPORT_KEYS = use_all
-        cfg.REPORT_KEY_RUN_LIST = [s.strip().upper() for s in (report_keys or "").split(",") if s.strip()]
+        if submitted:
+            # Apply per-run config
+            cfg.TO_RECIPIENTS = _split_emails(to)
+            cfg.CC_RECIPIENTS = _split_emails(cc)
+            cfg.USE_ALL_REPORT_KEYS = use_all
+            cfg.REPORT_KEY_RUN_LIST = [s.strip().upper() for s in (report_keys or "").split(",") if s.strip()]
 
-        cfg.INCLUDE_FULL_ORDER_IN_EACH_REPORT_KEY_EMAIL = include_full
-        cfg.SEND_SEPARATE_FULL_ORDER_EMAIL = send_full
-        cfg.EMAIL_MANAGER_REPORT = bool(email_mgr)
+            cfg.INCLUDE_FULL_ORDER_IN_EACH_REPORT_KEY_EMAIL = include_full
+            cfg.SEND_SEPARATE_FULL_ORDER_EMAIL = send_full
+            cfg.EMAIL_MANAGER_REPORT = bool(email_mgr)
 
-        cfg.CALC_SPREADSHEET_ID = calc_id
-        cfg.INCOMING_FOLDER_ID = incoming_id
-        cfg.MANAGER_REPORT_FOLDER_ID = mgr_folder
-        cfg.ORDER_REPORT_FOLDER_ID = order_folder
-        cfg.REDIRECT_PORT = int(redirect_port)
+            cfg.CALC_SPREADSHEET_ID = calc_id
+            cfg.INCOMING_FOLDER_ID = incoming_id
+            cfg.MANAGER_REPORT_FOLDER_ID = mgr_folder
+            cfg.ORDER_REPORT_FOLDER_ID = order_folder
+            cfg.REDIRECT_PORT = int(redirect_port)
 
-        cfg.GID_MANAGER_PDF = gid_mgr
-        cfg.GID_ORDER_CSV = gid_order
-        cfg.LOCATION_SHEET_TITLE = loc_sheet
-        cfg.LOCATION_NAMED_RANGE = loc_range
-        cfg.TIMESTAMP_TZ = tz
-        cfg.TIMESTAMP_FMT = tfmt
+            cfg.GID_MANAGER_PDF = gid_mgr
+            cfg.GID_ORDER_CSV = gid_order
+            cfg.LOCATION_SHEET_TITLE = loc_sheet
+            cfg.LOCATION_NAMED_RANGE = loc_range
+            cfg.TIMESTAMP_TZ = tz
+            cfg.TIMESTAMP_FMT = tfmt
 
-        # Per-key recipients from editor
-        
-        rk_map = {}
-        for r in edited_rows:
-            key = (r.get("REPORT KEY (ALL CAPS)") or "").strip()
-            emails_csv = r.get("Emails (comma)") or ""
-            emails = _parse_emails(emails_csv)
-            if key and emails:
-                rk_map[key] = emails
-        cfg.REPORT_KEY_RECIPIENTS = rk_map
+            # Per-key recipients from editor
+            
+            rk_map = {}
+            for r in edited_rows:
+                key = (r.get("REPORT KEY (ALL CAPS)") or "").strip()
+                emails_csv = r.get("Emails (comma)") or ""
+                emails = _parse_emails(emails_csv)
+                if key and emails:
+                    rk_map[key] = emails
+            cfg.REPORT_KEY_RECIPIENTS = rk_map
 
-        # --- ADD: warnings before kicking off the run ---
-        # 1) Warn if use_all is OFF and no explicit keys provided
-        requested_keys = [s.strip().upper() for s in (report_keys or "").split(",") if s.strip()]
-        if not use_all and not requested_keys:
-            st.warning(
-                "You left **Use all Report Keys** OFF but provided **no keys** to run. "
-                "No per‑key outputs will be generated unless you add keys.",
-                icon="⚠️"
-            )
+            # --- ADD: warnings before kicking off the run ---
+            # 1) Warn if use_all is OFF and no explicit keys provided
+            requested_keys = [s.strip().upper() for s in (report_keys or "").split(",") if s.strip()]
+            if not use_all and not requested_keys:
+                st.warning(
+                    "You left **Use all Report Keys** OFF but provided **no keys** to run. "
+                    "No per‑key outputs will be generated unless you add keys.",
+                    icon="⚠️"
+                )
 
-        # 2) Warn if no recipients anywhere (TO, DEFAULT_ORDER, or per‑key map)
-        any_to = bool(_parse_emails(to) or (cfg.TO_RECIPIENTS or []))
-        any_default = bool(cfg.DEFAULT_ORDER_RECIPIENTS or [])
-        any_per_key = bool(cfg.REPORT_KEY_RECIPIENTS)
-        if not (any_to or any_default or any_per_key):
-            st.warning(
-                "No recipients are defined: **TO**, **DEFAULT_ORDER_RECIPIENTS**, and **Per‑Report‑Key** are all empty. "
-                "Emails will not be sent.",
-                icon="⚠️"
-            )
+            # 2) Warn if no recipients anywhere (TO, DEFAULT_ORDER, or per‑key map)
+            any_to = bool(_parse_emails(to) or (cfg.TO_RECIPIENTS or []))
+            any_default = bool(cfg.DEFAULT_ORDER_RECIPIENTS or [])
+            any_per_key = bool(cfg.REPORT_KEY_RECIPIENTS)
+            if not (any_to or any_default or any_per_key):
+                st.warning(
+                    "No recipients are defined: **TO**, **DEFAULT_ORDER_RECIPIENTS**, and **Per‑Report‑Key** are all empty. "
+                    "Emails will not be sent.",
+                    icon="⚠️"
+                )
 
-        # 3) Surface per-key table issues detected earlier
-        if rk_issues:
-            st.warning(
-                "Per‑report‑key recipient issues detected above. These may prevent emails from sending correctly:\n\n- "
-                + "\n- ".join(rk_issues),
-                icon="⚠️"
-            )
-        # --- END ADD ---
+            # 3) Surface per-key table issues detected earlier
+            if rk_issues:
+                st.warning(
+                    "Per‑report‑key recipient issues detected above. These may prevent emails from sending correctly:\n\n- "
+                    + "\n- ".join(rk_issues),
+                    icon="⚠️"
+                )
+            # --- END ADD ---
 
 
-        # --- Save edited defaults to Drive JSON (optional) ---
-        if save_drive_defaults:
-            try:
-                # Ensure we have a user token first
-                creds = load_valid_token(cfg.SCOPES)
-                if not creds:
-                    st.error("Not authenticated. Please complete Google sign‑in first (top of page).")
-                else:
-                    # Drive service
-                    _sheets, drive, _gmail = services(creds, cfg.HTTP_TIMEOUT_SECONDS)
-
-                    # What we persist (the fields you asked to move out of Secrets)
-                    drive_defaults = {
-                        "CALC_SPREADSHEET_ID": cfg.CALC_SPREADSHEET_ID,
-                        "INCOMING_FOLDER_ID": cfg.INCOMING_FOLDER_ID,
-                        "MANAGER_REPORT_FOLDER_ID": cfg.MANAGER_REPORT_FOLDER_ID,
-                        "ORDER_REPORT_FOLDER_ID": cfg.ORDER_REPORT_FOLDER_ID,
-
-                        "GID_MANAGER_PDF": cfg.GID_MANAGER_PDF,
-                        "GID_ORDER_CSV": cfg.GID_ORDER_CSV,
-
-                        "LOCATION_SHEET_TITLE": cfg.LOCATION_SHEET_TITLE,
-                        "LOCATION_NAMED_RANGE": cfg.LOCATION_NAMED_RANGE,
-
-                        "TIMESTAMP_TZ": cfg.TIMESTAMP_TZ,
-                        "TIMESTAMP_FMT": cfg.TIMESTAMP_FMT,
-
-                        "TO_RECIPIENTS": cfg.TO_RECIPIENTS,   # lists are fine; JSON keeps types
-                        "CC_RECIPIENTS": cfg.CC_RECIPIENTS,
-
-                        "USE_ALL_REPORT_KEYS": cfg.USE_ALL_REPORT_KEYS,
-                        "REPORT_KEY_RUN_LIST": cfg.REPORT_KEY_RUN_LIST,
-
-                        "REPORT_KEY_RECIPIENTS": cfg.REPORT_KEY_RECIPIENTS,
-
-                        "DEFAULT_ORDER_RECIPIENTS": cfg.DEFAULT_ORDER_RECIPIENTS,
-
-                        "INCLUDE_FULL_ORDER_IN_EACH_REPORT_KEY_EMAIL": cfg.INCLUDE_FULL_ORDER_IN_EACH_REPORT_KEY_EMAIL,
-                        "SEND_SEPARATE_FULL_ORDER_EMAIL": cfg.SEND_SEPARATE_FULL_ORDER_EMAIL,
-                        "EMAIL_MANAGER_REPORT": cfg.EMAIL_MANAGER_REPORT
-                    }
-
-                    # If you have CONFIG_FILE_ID in Secrets, we update that exact file.
-                    # Otherwise we'll upsert a file named 'favtrip_config.json' and return its id.
-                    CONFIG_FILE_ID = (st.secrets.get("CONFIG_FILE_ID", "") or "").strip()
-                    new_id = save_config_to_drive(
-                        drive,
-                        drive_defaults,
-                        file_id=CONFIG_FILE_ID or None,   # update/pin if set, else upsert by name
-                        # parent_folder_id=None,          # optional: set a folder id to create under
-                    )
-
-                    st.success(f"Saved defaults to Drive config (file id: {new_id}).")
-                    if not CONFIG_FILE_ID:
-                        st.info(
-                            "Tip: add this ID to Streamlit Secrets as `CONFIG_FILE_ID` to pin the same file for all runs:\n"
-                            f"`{new_id}`"
-                        )
-            except Exception as e:
-                st.error(f"Failed to save defaults to Drive: {e}")
-
-        # If user checked "Force Google re-auth for this run", kick them into auth gating first.
-        if cfg.FORCE_REAUTH:
-            clear_token()
-            try:
-                flow, url = start_oauth(cfg.SCOPES, cfg.REDIRECT_PORT)
-                st.session_state.oauth_flow = flow
-                st.session_state.oauth_url = url
-                st.session_state.auth_required = True
-                st.info("Re-auth required for this run. Open the URL shown in the Authentication panel.")
-                _rerun()
-            except Exception as e:
-                st.error(f"Failed to start OAuth: {e}")
-        else:
-            # --- Live run with timer + last log (no full log after completion) ---
-            # Write all logs to last_run.log; overwrite on each run
-            logger = StatusLogger(print_to_console=True, file_path="last_run.log", overwrite=True)
-            result_holder = {"value": None, "error": None}
-
-            def _runner():
+            # --- Save edited defaults to Drive JSON (optional) ---
+            if save_drive_defaults:
                 try:
-                    result_holder["value"] = run_pipeline(cfg, logger=logger)
-                # Catch BaseException so SystemExit / KeyboardInterrupt are captured too
-                except BaseException as e:
-                    result_holder["error"] = e
+                    # Ensure we have a user token first
+                    creds = load_valid_token(cfg.SCOPES)
+                    if not creds:
+                        st.error("Not authenticated. Please complete Google sign‑in first (top of page).")
+                    else:
+                        # Drive service
+                        _sheets, drive, _gmail = services(creds, cfg.HTTP_TIMEOUT_SECONDS)
 
-            t0 = time.perf_counter()
-            th = threading.Thread(target=_runner, daemon=True)
-            th.start()
+                        # What we persist (the fields you asked to move out of Secrets)
+                        drive_defaults = {
+                            "CALC_SPREADSHEET_ID": cfg.CALC_SPREADSHEET_ID,
+                            "INCOMING_FOLDER_ID": cfg.INCOMING_FOLDER_ID,
+                            "MANAGER_REPORT_FOLDER_ID": cfg.MANAGER_REPORT_FOLDER_ID,
+                            "ORDER_REPORT_FOLDER_ID": cfg.ORDER_REPORT_FOLDER_ID,
 
-            with st.status("Running pipeline…", expanded=True) as status:
-                timer_ph = st.empty()
-                lastlog_ph = st.empty()
-                while th.is_alive():
+                            "GID_MANAGER_PDF": cfg.GID_MANAGER_PDF,
+                            "GID_ORDER_CSV": cfg.GID_ORDER_CSV,
+
+                            "LOCATION_SHEET_TITLE": cfg.LOCATION_SHEET_TITLE,
+                            "LOCATION_NAMED_RANGE": cfg.LOCATION_NAMED_RANGE,
+
+                            "TIMESTAMP_TZ": cfg.TIMESTAMP_TZ,
+                            "TIMESTAMP_FMT": cfg.TIMESTAMP_FMT,
+
+                            "TO_RECIPIENTS": cfg.TO_RECIPIENTS,   # lists are fine; JSON keeps types
+                            "CC_RECIPIENTS": cfg.CC_RECIPIENTS,
+
+                            "USE_ALL_REPORT_KEYS": cfg.USE_ALL_REPORT_KEYS,
+                            "REPORT_KEY_RUN_LIST": cfg.REPORT_KEY_RUN_LIST,
+
+                            "REPORT_KEY_RECIPIENTS": cfg.REPORT_KEY_RECIPIENTS,
+
+                            "DEFAULT_ORDER_RECIPIENTS": cfg.DEFAULT_ORDER_RECIPIENTS,
+
+                            "INCLUDE_FULL_ORDER_IN_EACH_REPORT_KEY_EMAIL": cfg.INCLUDE_FULL_ORDER_IN_EACH_REPORT_KEY_EMAIL,
+                            "SEND_SEPARATE_FULL_ORDER_EMAIL": cfg.SEND_SEPARATE_FULL_ORDER_EMAIL,
+                            "EMAIL_MANAGER_REPORT": cfg.EMAIL_MANAGER_REPORT
+                        }
+
+                        # If you have CONFIG_FILE_ID in Secrets, we update that exact file.
+                        # Otherwise we'll upsert a file named 'favtrip_config.json' and return its id.
+                        CONFIG_FILE_ID = (st.secrets.get("CONFIG_FILE_ID", "") or "").strip()
+                        new_id = save_config_to_drive(
+                            drive,
+                            drive_defaults,
+                            file_id=CONFIG_FILE_ID or None,   # update/pin if set, else upsert by name
+                            # parent_folder_id=None,          # optional: set a folder id to create under
+                        )
+
+                        st.success(f"Saved defaults to Drive config (file id: {new_id}).")
+                        if not CONFIG_FILE_ID:
+                            st.info(
+                                "Tip: add this ID to Streamlit Secrets as `CONFIG_FILE_ID` to pin the same file for all runs:\n"
+                                f"`{new_id}`"
+                            )
+                except Exception as e:
+                    st.error(f"Failed to save defaults to Drive: {e}")
+
+            # If user checked "Force Google re-auth for this run", kick them into auth gating first.
+            if cfg.FORCE_REAUTH:
+                clear_token()
+                try:
+                    flow, url = start_oauth(cfg.SCOPES, cfg.REDIRECT_PORT)
+                    st.session_state.oauth_flow = flow
+                    st.session_state.oauth_url = url
+                    st.session_state.auth_required = True
+                    st.info("Re-auth required for this run. Open the URL shown in the Authentication panel.")
+                    _rerun()
+                except Exception as e:
+                    st.error(f"Failed to start OAuth: {e}")
+            else:
+                # --- Live run with timer + last log (no full log after completion) ---
+                # Write all logs to last_run.log; overwrite on each run
+                logger = StatusLogger(print_to_console=True, file_path="last_run.log", overwrite=True)
+                result_holder = {"value": None, "error": None}
+
+                def _runner():
+                    try:
+                        result_holder["value"] = run_pipeline(cfg, logger=logger)
+                    # Catch BaseException so SystemExit / KeyboardInterrupt are captured too
+                    except BaseException as e:
+                        result_holder["error"] = e
+
+                t0 = time.perf_counter()
+                th = threading.Thread(target=_runner, daemon=True)
+                th.start()
+
+                with st.status("Running pipeline…", expanded=True) as status:
+                    timer_ph = st.empty()
+                    lastlog_ph = st.empty()
+                    while th.is_alive():
+                        elapsed = int(time.perf_counter() - t0)
+                        timer_ph.markdown(f"**Elapsed:** `{elapsed//3600:02d}:{(elapsed%3600)//60:02d}:{elapsed%60:02d}`")
+                        lastlog_ph.markdown(f"**Last:** {logger.last_line()}")
+                        time.sleep(0.5)
+
+                    th.join()
                     elapsed = int(time.perf_counter() - t0)
                     timer_ph.markdown(f"**Elapsed:** `{elapsed//3600:02d}:{(elapsed%3600)//60:02d}:{elapsed%60:02d}`")
                     lastlog_ph.markdown(f"**Last:** {logger.last_line()}")
-                    time.sleep(0.5)
 
-                th.join()
-                elapsed = int(time.perf_counter() - t0)
-                timer_ph.markdown(f"**Elapsed:** `{elapsed//3600:02d}:{(elapsed%3600)//60:02d}:{elapsed%60:02d}`")
-                lastlog_ph.markdown(f"**Last:** {logger.last_line()}")
-
-                if result_holder["error"]:
-                    st.error(f"Run failed: {result_holder['error']}")
-                    # Optional during debugging: show stack trace (remove later for a cleaner UI)
-                    try:
-                        st.exception(result_holder["error"])
-                    except Exception:
-                        pass
-                    status.update(label="❌ Failed", state="error")
-                else:
-                    result = result_holder["value"]
-                    if result is None:
-                        st.error("Run finished without returning a result. Check logs and inputs (IDs, Drive access).")
-                        status.update(label="⚠️ No result", state="error")
+                    if result_holder["error"]:
+                        st.error(f"Run failed: {result_holder['error']}")
+                        # Optional during debugging: show stack trace (remove later for a cleaner UI)
+                        try:
+                            st.exception(result_holder["error"])
+                        except Exception:
+                            pass
+                        status.update(label="❌ Failed", state="error")
                     else:
-                        st.write("### Outputs")
-                        col1, col2, col3 = st.columns(3)
-                        col1.metric("Location", result.location)
-                        col2.metric("Timestamp", result.timestamp)
-                        mm = result.elapsed_seconds
-                        col3.metric("Elapsed", f"{mm//3600:02d}:{(mm%3600)//60:02d}:{mm%60:02d}")
+                        result = result_holder["value"]
+                        if result is None:
+                            st.error("Run finished without returning a result. Check logs and inputs (IDs, Drive access).")
+                            status.update(label="⚠️ No result", state="error")
+                        else:
+                            st.write("### Outputs")
+                            col1, col2, col3 = st.columns(3)
+                            col1.metric("Location", result.location)
+                            col2.metric("Timestamp", result.timestamp)
+                            mm = result.elapsed_seconds
+                            col3.metric("Elapsed", f"{mm//3600:02d}:{(mm%3600)//60:02d}:{mm%60:02d}")
 
-                        if getattr(result, "manager_pdf_link", None):
-                            st.success(f"Manager PDF: {result.manager_pdf_link}")
-                        if getattr(result, "full_order_link", None):
-                            st.success(f"Full Order Sheet: {result.full_order_link}")
+                            if getattr(result, "manager_pdf_link", None):
+                                st.success(f"Manager PDF: {result.manager_pdf_link}")
+                            if getattr(result, "full_order_link", None):
+                                st.success(f"Full Order Sheet: {result.full_order_link}")
 
-                            
-                        if st.session_state.offer_log_download and os.path.exists("last_run.log"):
-                            with open("last_run.log", "rb") as f:
-                                st.download_button(
-                                    "⬇️ Download full log (last_run.log)",
-                                    f,
-                                    file_name=f"last_run_{result.timestamp}.log",
-                                    mime="text/plain",
-                                    use_container_width=True
-                                )
-                            
+                                
+                            if st.session_state.offer_log_download and os.path.exists("last_run.log"):
+                                with open("last_run.log", "rb") as f:
+                                    st.download_button(
+                                        "⬇️ Download full log (last_run.log)",
+                                        f,
+                                        file_name=f"last_run_{result.timestamp}.log",
+                                        mime="text/plain",
+                                        use_container_width=True
+                                    )
+                                
 
-                        status.update(label="✅ Completed", state="complete")
+                            status.update(label="✅ Completed", state="complete")
             
     # 🔚 CLOSE the run card wrapper (ALWAYS close after the form block)
 
