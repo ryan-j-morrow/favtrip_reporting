@@ -258,7 +258,7 @@ def render_run_form(cfg):
                 "⬆️ Upload Now",
                 use_container_width=True,
                 disabled=(not file_selected),
-                type="secondary",
+                type="primary",
                 key="upload_submit",
             )
             st.markdown('</div>', unsafe_allow_html=True)
