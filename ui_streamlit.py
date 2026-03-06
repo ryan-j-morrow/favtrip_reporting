@@ -598,18 +598,20 @@ def render_run_form(cfg):
 
 def render_auth_panel(cfg):
     st.markdown("### Google Sign‑in")
-    st.caption("Sign in with your Google account to allow access to Drive, Sheets, and Gmail as needed.")
-
-    # Show redirect base so you can verify it matches your Google Console config
-    #redirect_base = _redirect_base()
-    #with st.expander("OAuth details", expanded=False):
-    #    st.code(f"Redirect base: {redirect_base}", language="text")
-    #    st.code(f"Scopes: {', '.join(cfg.SCOPES)}", language="text")
+    st.caption("Sign in with your Google account to access the app.")
 
     if st.button("🔐 Sign in with Google", type="primary", use_container_width=True):
         try:
             auth_url = start_web_oauth(cfg.SCOPES)
-            st.markdown(f"[Click here to continue →]({auth_url})")
+
+            # 🔁 Redirect current tab instead of showing a link
+            from streamlit.components.v1 import html
+            html(f"""
+            <script>
+              window.top.location.href = "{auth_url}";
+            </script>
+            """, height=0)
+
             st.stop()
         except Exception as e:
             st.error(f"Failed to start OAuth: {e}")
@@ -622,7 +624,16 @@ def render_sidebar():
     if st.session_state.get("auth_required", True):
         if st.sidebar.button("Sign in"):
             auth_url = start_web_oauth(Config.load().SCOPES)
-            st.sidebar.markdown(f"[Continue →]({auth_url})")
+
+            # 🔁 Redirect current tab
+            from streamlit.components.v1 import html
+            html(f"""
+            <script>
+              window.top.location.href = "{auth_url}";
+            </script>
+            """, height=0)
+
+            st.stop()
     else:
         st.sidebar.success("Signed in")
         if st.sidebar.button("Sign out"):
