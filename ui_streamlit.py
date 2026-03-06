@@ -653,6 +653,10 @@ def render_run_form(cfg):
                                 with open("last_run.log", "rb") as f:
                                     st.session_state["last_run_log"] = f.read()
                                     st.session_state["last_run_timestamp"] = result.timestamp
+                            
+                            st.session_state.incoming_uploaded_ok = False
+                            st.session_state.incoming_uploader_version += 1
+                            st.session_state.incoming_selected_name = None
 
                             status.update(label="✅ Completed", state="complete")
 
