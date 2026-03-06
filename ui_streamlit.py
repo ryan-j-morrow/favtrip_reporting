@@ -669,6 +669,7 @@ def render_run_form(cfg):
             mime="text/plain",
             use_container_width=True
         )
+    _rerun()
 
 
 
