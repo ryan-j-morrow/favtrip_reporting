@@ -444,7 +444,6 @@ def render_run_form(cfg):
             with gc1:
                 tz = st.text_input("Timestamp Timezone", value=cfg.TIMESTAMP_TZ)
                 tfmt = st.text_input("Timestamp Format", value=cfg.TIMESTAMP_FMT)
-            with gc2:
                 raw_redirect_port = int(cfg.REDIRECT_PORT) if str(cfg.REDIRECT_PORT).isdigit() else 0
                 redirect_port = st.number_input(
                     "Redirect Port (0 = auto)",
@@ -452,6 +451,24 @@ def render_run_form(cfg):
                     value=raw_redirect_port if raw_redirect_port in (0, *range(1024, 65536)) else 0,
                     help="Use 0 to auto-pick a free port. Otherwise choose 1024–65535."
                 )
+
+            with gc2:                                
+                output_ttl = st.number_input(
+                    "Output Time-To-Life (days)",
+                    min_value=0,
+                    max_value=3650,
+                    value=int(cfg.OUTPUT_TIME_TO_LIFE),
+                    help="Delete Manager/Order report files older than this many days after a successful run."
+                    )
+
+                failed_input_ttl = st.number_input(
+                    "Failed Input Time-To-Life (days)",
+                    min_value=0,
+                    max_value=3650,
+                    value=int(cfg.FAILED_INPUT_TIME_TO_LIFE),
+                    help="Delete old unused incoming files older than this many days."
+                    )
+
 
         save_drive_defaults = st.checkbox("Update defaults", value=False)
 
@@ -482,6 +499,10 @@ def render_run_form(cfg):
             cfg.LOCATION_NAMED_RANGE = loc_range
             cfg.TIMESTAMP_TZ = tz
             cfg.TIMESTAMP_FMT = tfmt
+            
+            cfg.OUTPUT_TIME_TO_LIFE = int(output_ttl)
+            cfg.FAILED_INPUT_TIME_TO_LIFE = int(failed_input_ttl)
+
 
             # Per-key recipients from editor
             
@@ -551,6 +572,9 @@ def render_run_form(cfg):
 
                             "TIMESTAMP_TZ": cfg.TIMESTAMP_TZ,
                             "TIMESTAMP_FMT": cfg.TIMESTAMP_FMT,
+
+                            "OUTPUT_TIME_TO_LIFE": cfg.OUTPUT_TIME_TO_LIFE,
+                            "FAILED_INPUT_TIME_TO_LIFE": cfg.FAILED_INPUT_TIME_TO_LIFE
 
                             "TO_RECIPIENTS": cfg.TO_RECIPIENTS,   # lists are fine; JSON keeps types
                             "CC_RECIPIENTS": cfg.CC_RECIPIENTS,

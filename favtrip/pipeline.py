@@ -19,7 +19,7 @@ from .sheets_utils import (
     delete_sheet, copy_sheet_as, copy_first_sheet_as, refresh_sheets_with_prefix,
     get_value, first_gid
 )
-from .drive_utils import find_latest_sheet, upload_to_drive
+from .drive_utils import find_latest_sheet, upload_to_drive, _rfc3339, trash_file, cleanup_folder_by_age
 from .gmail_utils import send_email, email_manager_report
 
 CSV_MIME = "text/csv"
@@ -292,6 +292,40 @@ def run_pipeline(cfg: Config, logger=None) -> RunResult:
     else:
         if logger:
             logger.info("Separate full order email disabled")
+
+    
+    # Step 4G: File Cleanup
+
+    try:
+        if logger:
+            logger.info("Cleaning up used incoming file…")
+        trash_file(drive_svc, new_report_id)
+
+        if logger:
+            logger.info("Cleaning old incoming files…")
+        cleanup_folder_by_age(
+            drive_svc,
+            cfg.INCOMING_FOLDER_ID,
+            cfg.FAILED_INPUT_TIME_TO_LIFE,
+            logger
+        )
+
+        if logger:
+            logger.info("Cleaning old output files…")
+        for folder in [
+            cfg.MANAGER_REPORT_FOLDER_ID,
+            cfg.ORDER_REPORT_FOLDER_ID
+        ]:
+            cleanup_folder_by_age(
+                drive_svc,
+                folder,
+                cfg.OUTPUT_TIME_TO_LIFE,
+                logger
+            )
+
+    except Exception as e:
+        if logger:
+            logger.warn(f"Housekeeping failed: {e}")
 
     elapsed = int(time.perf_counter() - start)
     if logger:
