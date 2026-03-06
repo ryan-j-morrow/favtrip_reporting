@@ -272,31 +272,31 @@ st.markdown("""
 
 st.markdown("""
 <style>
-/* --- Color palette --- */
 :root{
   --ft-grey:  #9aa0a6;
   --ft-red:   #d93025;
   --ft-green: #188038;
+  --ft-blue:  #1a73e8;
 }
 
-/* Upload button color by state: the marker div sits immediately before stButton's wrapper */
-.ft-up-grey + div button  { background: var(--ft-grey)  !important; color: #fff !important; border-color: var(--ft-grey)  !important; }
-.ft-up-red  + div button  { background: var(--ft-red)   !important; color: #fff !important; border-color: var(--ft-red)   !important; }
-.ft-up-green+ div button  { background: var(--ft-green) !important; color: #fff !important; border-color: var(--ft-green) !important; }
+/* Optional: remove global “force blue” for all form submit buttons, or keep it,
+   but we’ll override it below with more specific selectors. */
+/* div[data-testid="stFormSubmitButton"] button { background: var(--ft-blue) !important; color:#fff !important; } */
 
-/* Run button forced-grey when needed */
-.ft-run-grey + div button { background: var(--ft-grey) !important; color: #fff !important; border-color: var(--ft-grey) !important; }
+/* Shared scope so we can apply shared button text color */
+.ft-scope [data-testid="stFormSubmitButton"] button {
+  color: #fff !important;
+  border: none !important;
+}
 
-/* Keep the one-line row tight */
-.ft-upload-row { margin-top: 0.25rem; margin-bottom: 0.25rem; }
-.ft-upload-row .stFileUploader { padding-top: 0; padding-bottom: 0; margin-top: 0; margin-bottom: 0; }
-.ft-upload-title { margin: 0 0 0.25rem 0; font-size: 0.9rem; font-weight: 600; opacity: 0.8; }
+/* Upload button by state */
+#ft-upload[data-state="none"]  [data-testid="stFormSubmitButton"] button { background: var(--ft-grey)  !important; }
+#ft-upload[data-state="need"]  [data-testid="stFormSubmitButton"] button { background: var(--ft-red)   !important; }
+#ft-upload[data-state="ok"]    [data-testid="stFormSubmitButton"] button { background: var(--ft-green) !important; }
 
-/* Right-align helper for the upload button cell */
-.ft-align-right > div { display: flex; justify-content: flex-end; }
-
-/* Ensure disabled look is consistent */
-.ft-disabled { opacity: 0.6; pointer-events: none; }
+/* Run button by state */
+#ft-run[data-state="grey"]     [data-testid="stFormSubmitButton"] button { background: var(--ft-grey)  !important; }
+#ft-run[data-state="blue"]     [data-testid="stFormSubmitButton"] button { background: var(--ft-blue)  !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -523,6 +523,28 @@ if st.session_state.auth_required:
 # ----------------------------
 if not st.session_state.auth_required:
 
+
+    # --- Determine upload & run states BEFORE rendering buttons ---
+
+    file_selected = incoming_file is not None
+    if file_selected and st.session_state.incoming_selected_name != incoming_file.name:
+        st.session_state.incoming_selected_name = incoming_file.name
+        st.session_state.incoming_uploaded_ok = False
+
+    if not file_selected:
+        upload_state = "none"  # grey
+        run_disabled = False
+        run_state = "blue"     # default blue
+    elif file_selected and not st.session_state.incoming_uploaded_ok:
+        upload_state = "need"  # red (needs upload)
+        run_disabled = True
+        run_state = "grey"     # force grey while not uploaded
+    else:
+        upload_state = "ok"    # green
+        run_disabled = False
+        run_state = "blue"
+
+
     # ---- Run Form (Run button top-right) ----
     with st.form("run_form"):
         
@@ -533,10 +555,10 @@ if not st.session_state.auth_required:
             st.caption("Configure email behavior and report keys. Use **Advanced** for IDs/GIDs/timezone.")
 
         with col_run:
-            run_marker = getattr(st.session_state, "ft_run_marker_html", "")
-            if run_marker:
-                st.markdown(run_marker, unsafe_allow_html=True)
-            submitted = st.form_submit_button("▶️ Run Pipeline", use_container_width=True, disabled=getattr(st.session_state, "ft_run_disabled", False))
+            # Wrap the button so CSS can target only this button
+            st.markdown(f'<div id="ft-run" class="ft-scope" data-state="{run_state}">', unsafe_allow_html=True)
+            submitted = st.form_submit_button("▶️ Run Pipeline", use_container_width=True, disabled=run_disabled)
+            st.markdown('</div>', unsafe_allow_html=True)
 
 
         # ===== Upload row ABOVE Recipients =====
@@ -550,51 +572,16 @@ if not st.session_state.auth_required:
                 "Upload Current Week Sales Report",
                 type=["xlsx", "csv"],
                 key="incoming_upload",
+                help= "Please upload the 'Live Items' report from Modisoft as a XLSX or CSV file."
                 label_visibility="collapsed",
                 accept_multiple_files=False,
             )
             st.markdown('</div>', unsafe_allow_html=True)
-
-        # --- Determine state (none selected / selected-not-uploaded / uploaded) ---
-        file_selected = incoming_file is not None
-        new_selection = False
-        if file_selected:
-            # If user picked a different file than last time, reset 'uploaded_ok'
-            if st.session_state.incoming_selected_name != incoming_file.name:
-                st.session_state.incoming_selected_name = incoming_file.name
-                st.session_state.incoming_uploaded_ok = False
-                new_selection = True
-
-        # --- Decide button colors & Run button behavior via 'marker' divs ---
-        # Upload button marker (immediately before the button)
-        if not file_selected:
-            up_marker_html = '<div class="ft-up-grey"></div>'
-            run_marker_html = ""                # keep default blue for Run
-            run_disabled = False
-        elif file_selected and not st.session_state.incoming_uploaded_ok:
-            up_marker_html = '<div class="ft-up-red"></div>'
-            run_marker_html = '<div class="ft-run-grey"></div>'  # paint Run grey while unuploaded
-            run_disabled = True                                 # also disable Run
-        else:
-            # file selected AND uploaded_ok
-            up_marker_html = '<div class="ft-up-green"></div>'
-            run_marker_html = ""                # back to default primary (blue)
-            run_disabled = False
-
-        # Push the Run-button decisions to session so header can read them
-        st.session_state.ft_run_marker_html = run_marker_html
-        st.session_state.ft_run_disabled = run_disabled
-
+       
         with upbtn_col:
-            st.markdown('<div class="ft-align-right">', unsafe_allow_html=True)
-            # Place the upload-state marker right before the Streamlit button
-            st.markdown(up_marker_html, unsafe_allow_html=True)
-
-            upload_clicked = st.form_submit_button(
-                "⬆️ Upload Now",
-                use_container_width=True,
-                disabled=(not file_selected)
-            )
+            # Right-align wrapper + state scope
+            st.markdown(f'<div id="ft-upload" class="ft-scope ft-align-right" data-state="{upload_state}">', unsafe_allow_html=True)
+            upload_clicked = st.form_submit_button("⬆️ Upload Now", use_container_width=True, disabled=(not file_selected))
             st.markdown('</div>', unsafe_allow_html=True)
 
         # --- Handle the upload action ---
