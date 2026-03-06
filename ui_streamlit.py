@@ -337,8 +337,7 @@ def render_run_form(cfg):
     if st.session_state.get("incoming_uploaded_ok", False):
         run_form_wrapper_classes += " ft-run-green"
 
-    #st.markdown(f'<div class="{run_form_wrapper_classes}">', unsafe_allow_html=True)
-
+    
     with st.form("run_form"):
         # Header row uses the same columns to align the Run button with Upload button above
         tl, _, col_run = st.columns([4, 1, 1])
@@ -595,18 +594,17 @@ def render_run_form(cfg):
             run_pipeline(cfg, logger)
             
     # 🔚 CLOSE the run card wrapper (ALWAYS close after the form block)
-    #st.markdown('</div>', unsafe_allow_html=True)
-
+    
 
 def render_auth_panel(cfg):
     st.markdown("### Google Sign‑in")
     st.caption("Sign in with your Google account to allow access to Drive, Sheets, and Gmail as needed.")
 
     # Show redirect base so you can verify it matches your Google Console config
-    redirect_base = _redirect_base()
-    with st.expander("OAuth details", expanded=False):
-        st.code(f"Redirect base: {redirect_base}", language="text")
-        st.code(f"Scopes: {', '.join(cfg.SCOPES)}", language="text")
+    #redirect_base = _redirect_base()
+    #with st.expander("OAuth details", expanded=False):
+    #    st.code(f"Redirect base: {redirect_base}", language="text")
+    #    st.code(f"Scopes: {', '.join(cfg.SCOPES)}", language="text")
 
     if st.button("🔐 Sign in with Google", type="primary", use_container_width=True):
         try:
