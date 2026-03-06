@@ -636,8 +636,8 @@ def render_sidebar():
 # App Entrypoint
 # =========================
 
-st.set_page_config(page_title="FavTrip Reporting Pipeline", page_icon="🧾", layout="wide")
-st.title("🧾 FavTrip Reporting Pipeline")
+#st.set_page_config(page_title="FavTrip Reporting Pipeline", page_icon="🧾", layout="wide")
+#st.title("🧾 FavTrip Reporting Pipeline")
 
 
 st.set_page_config(
