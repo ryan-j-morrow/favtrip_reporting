@@ -572,7 +572,7 @@ if not st.session_state.auth_required:
                 "Upload Current Week Sales Report",
                 type=["xlsx", "csv"],
                 key="incoming_upload",
-                help= "Please upload the 'Live Items' report from Modisoft as a XLSX or CSV file."
+                help= "Please upload the 'Live Items' report from Modisoft as a XLSX or CSV file.",
                 label_visibility="collapsed",
                 accept_multiple_files=False,
             )
