@@ -213,126 +213,8 @@ def finish_web_oauth(code: str, state_b64: str, scopes):
 # UI Sections
 # =========================
 
-def render_sidebar():
-    st.header("Utilities")
-
-    if st.button("Google Sign Out", type="secondary", use_container_width=True):
-        clear_token()
-        for key in ["auth_required", "_oauth_redirect"]:
-            if key in st.session_state:
-                del st.session_state[key]
-        _rerun()
-
-    st.checkbox(
-        "Offer full log download after completion",
-        key="offer_log_download",
-        help="If enabled, a 'Download last_run.log' button appears when a run finishes."
-    )
-
-
-def handle_oauth_redirect_if_any(cfg):
-    params = st.query_params
-    if "code" in params and "state" in params:
-        try:
-            finish_web_oauth(params["code"], params["state"], cfg.SCOPES)
-            st.success("✅ Google authentication complete.")
-            st.query_params.clear()
-
-            # Notify opener (if any), then close this tab.
-            html(
-                """
-                <script>
-                  try {
-                    if (window.opener && !window.opener.closed) {
-                      window.opener.postMessage({type: "favtrip_oauth_done"}, "*");
-                    }
-                  } catch (e) {}
-                  window.close();
-                </script>
-                """,
-                height=0,
-            )
-            st.caption("You can close this window if it didn't close automatically.")
-        except Exception as e:
-            st.error(f"OAuth error: {e}")
-
-
-def render_auth_panel(cfg):
-    with st.expander("Google Authentication", expanded=True):
-        st.caption(
-            "Authentication is required before running. "
-            "Click **Sign in with Google** to open the consent screen (it will open in a new tab)."
-        )
-
-        sign_in_ph = st.empty()
-        clicked = sign_in_ph.button("Sign in with Google", type="primary", use_container_width=True)
-
-        if clicked:
-            try:
-                auth_url = start_web_oauth(cfg.SCOPES)
-
-                # Remove the button immediately
-                sign_in_ph.empty()
-
-                # Show message
-                st.markdown(
-                    """
-                    <div style="
-                        display:flex;align-items:center;justify-content:center;
-                        height:55vh;text-align:center;
-                        font-family: system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;">
-                      <div>
-                        <h2 style="margin-bottom:0.5rem;">You're being signed in…</h2>
-                        <p style="font-size:1.05rem;opacity:.9;">
-                          A new browser tab was opened for Google sign‑in.<br/>
-                          <strong>After it completes, you may close this tab.</strong>
-                        </p>
-                      </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-
-                # If user returns to this tab later, refresh to show signed-in state
-                html(
-                    """
-                    <script>
-                      document.addEventListener("visibilitychange", function() {
-                        if (!document.hidden) { location.reload(); }
-                      });
-                    </script>
-                    """,
-                    height=0,
-                )
-
-                # Open Google auth in a NEW tab
-                html(
-                    f"""
-                    <script>
-                      window.open({json.dumps(auth_url)}, "_blank", "noopener");
-                    </script>
-                    """,
-                    height=0,
-                )
-
-                st.stop()
-
-            except Exception as e:
-                st.error(f"Failed to start OAuth: {e}")
-
-        with st.expander("Having trouble?", expanded=False):
-            st.write(
-                "- The Google authorization page opens in a **new browser tab**.\n"
-                "- After completing consent, **close this tab** and use the new tab.\n"
-                "- If you renamed your Streamlit app or URL, ensure the Google OAuth "
-                "Authorized redirect URI matches exactly (including trailing slash)."
-            )
-
-
 def render_run_form(cfg):
-    # ---------------------------
-    # Initialize state
-    # ---------------------------
+    # --- STATE INIT ---
     if "incoming_uploader_version" not in st.session_state:
         st.session_state.incoming_uploader_version = 0
     if "incoming_selected_name" not in st.session_state:
@@ -342,17 +224,20 @@ def render_run_form(cfg):
 
     uploader_key = f"incoming_upload_v{st.session_state.incoming_uploader_version}"
 
-    # ---------------------------
-    # Upload section (OUTSIDE form)
-    # ---------------------------
-    st.markdown("**Upload Current Week Sales Report**")
+    # =========================
+    # UPLOAD CARD (outside form)
+    # =========================
+    st.markdown('<div class="ft-card">', unsafe_allow_html=True)
+    st.markdown("#### Upload Current Week Sales Report")
+
+    # Use the SAME column grid as the run form header: [4, 1, 1]
     up_col, _, upbtn_col = st.columns([4, 1, 1])
 
     with up_col:
         incoming_file = st.file_uploader(
             "Upload Current Week Sales Report",
             type=["xlsx", "csv"],
-            key=uploader_key,  # <- versioned key so we can "reset" after success
+            key=uploader_key,
             help="Please upload the current week's 'Live Items Report' from Modisoft as an XLSX or CSV file.",
             label_visibility="collapsed",
             accept_multiple_files=False,
@@ -365,7 +250,8 @@ def render_run_form(cfg):
         st.session_state.incoming_uploaded_ok = False
 
     with upbtn_col:
-        # Normal button (not a form submit) so it acts immediately
+        # Ensure full-width alignment like the Run button
+        st.markdown('<div class="ft-right-btn">', unsafe_allow_html=True)
         upload_clicked = st.button(
             "⬆️ Upload Now",
             use_container_width=True,
@@ -373,8 +259,9 @@ def render_run_form(cfg):
             type="secondary",
             key="upload_submit",
         )
+        st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- Handle the upload action immediately (since it's outside a form) ---
+    # --- Handle the upload action immediately ---
     if upload_clicked:
         if not cfg.INCOMING_FOLDER_ID:
             st.error("Incoming Folder ID is empty. Set it under **Advanced → Incoming Folder ID**.")
@@ -396,10 +283,9 @@ def render_run_form(cfg):
                 )
                 link = created.get("webViewLink", "")
 
-                # Mark upload success
                 st.session_state.incoming_uploaded_ok = True
 
-                # ✅ Reset uploader by bumping its version so it gets a NEW key next run
+                # Reset uploader: bump version so key changes and the widget resets on rerun
                 st.session_state.incoming_uploader_version += 1
                 st.session_state.incoming_selected_name = None
 
@@ -407,20 +293,24 @@ def render_run_form(cfg):
                 if link:
                     st.link_button("Open uploaded Sheet", link, use_container_width=True)
                 st.caption("This will be treated as the latest incoming report on the next run.")
-
-                # Refresh UI so Run button gating & style update and uploader clears
                 _rerun()
             except Exception as e:
                 st.error(f"Upload failed: {e}")
 
-    # After a rerun (or if no new file selected), recompute selection moment
-    file_selected = incoming_file is not None
+    st.markdown('</div>', unsafe_allow_html=True)  # end .ft-card (UPLOAD)
 
-    # ---------------------------
-    # Run form (ONLY run options + submit)
-    # ---------------------------
+    # =========================
+    # RUN FORM CARD
+    # =========================
+    # When upload is OK, make the Run button green by adding .ft-run-green to the page segment
+    run_form_wrapper_classes = "ft-card ft-row"
+    if st.session_state.get("incoming_uploaded_ok", False):
+        run_form_wrapper_classes += " ft-run-green"
+
+    st.markdown(f'<div class="{run_form_wrapper_classes}">', unsafe_allow_html=True)
+
     with st.form("run_form"):
-        # Header row
+        # Header row uses the same columns to align the Run button with Upload button above
         tl, _, col_run = st.columns([4, 1, 1])
         with tl:
             st.subheader("Run Options")
@@ -428,32 +318,15 @@ def render_run_form(cfg):
 
         # Gate: require successful upload only if a new file is currently selected but not uploaded
         if not file_selected:
-            run_disabled = False           # allow runs without selecting a new upload
+            run_disabled = False
         elif file_selected and not st.session_state.get("incoming_uploaded_ok", False):
-            run_disabled = True            # a new file is selected but not uploaded yet
+            run_disabled = True
         else:
             run_disabled = False
 
-        # ✅ Make the Run button green once uploaded
-        if st.session_state.get("incoming_uploaded_ok", False):
-            st.markdown(
-                """
-                <style>
-                  /* Color only the submit button inside this form when upload is OK */
-                  div[data-testid="stFormSubmitButton"] button {
-                      background-color: #188038 !important; /* green */
-                      color: #fff !important;
-                  }
-                  div[data-testid="stFormSubmitButton"] button:hover {
-                      filter: brightness(0.95);
-                  }
-                </style>
-                """,
-                unsafe_allow_html=True,
-            )
-
-        # Run button (top-right)
         with col_run:
+            # Right-align and full-width, matching Upload Now
+            st.markdown('<div class="ft-right-btn">', unsafe_allow_html=True)
             submitted = st.form_submit_button(
                 "▶️ Run Pipeline",
                 use_container_width=True,
@@ -461,6 +334,7 @@ def render_run_form(cfg):
                 type="primary",
                 key="run_submit"
             )
+            st.markdown('</div>', unsafe_allow_html=True)
 
         # ----- Main options -----
 
@@ -689,6 +563,9 @@ def render_run_form(cfg):
             # Run
             logger = StatusLogger(print_to_console=True, file_path="last_run.log", overwrite=True)
             run_pipeline(cfg, logger)
+            
+    # 🔚 CLOSE the run card wrapper (ALWAYS close after the form block)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 # =========================
 # App Entrypoint
@@ -696,6 +573,34 @@ def render_run_form(cfg):
 
 st.set_page_config(page_title="FavTrip Reporting Pipeline", page_icon="🧾", layout="wide")
 st.title("🧾 FavTrip Reporting Pipeline")
+
+st.set_page_config(...)
+
+# Global card/layout styles (once)
+st.markdown("""
+<style>
+.ft-card {
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 10px;
+  padding: 1rem;
+  background: #fff;
+  margin-bottom: 1rem;
+}
+.ft-card h4 { margin: 0 0 .5rem 0; }
+.ft-row { display: block; }
+.ft-right-btn > div { display: flex; justify-content: flex-end; }
+.ft-right-btn > div button, .ft-right-btn > div a { width: 100%; }
+
+/* Makes the Run button green when upload succeeded (applied via wrapper class) */
+.ft-run-green div[data-testid="stFormSubmitButton"] button {
+  background-color: #188038 !important;
+  color: #fff !important;
+}
+.ft-run-green div[data-testid="stFormSubmitButton"] button:hover {
+  filter: brightness(0.95);
+}
+</style>
+""", unsafe_allow_html=True)
 
 cfg = Config.load()
 
