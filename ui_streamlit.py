@@ -598,14 +598,14 @@ def render_run_form(cfg):
 
 def render_auth_panel(cfg):
     st.markdown("### Google Sign‑in")
-    st.caption("Sign in with your Google account to access the app.")
+    st.caption("Sign in with your Google account to allow access to Drive, Sheets, and Gmail as needed.")
 
     if st.button("🔐 Sign in with Google", type="primary", use_container_width=True):
         try:
             auth_url = start_web_oauth(cfg.SCOPES)
 
-            # 🔁 Redirect current tab instead of showing a link
-            from streamlit.components.v1 import html
+            # 🔁 Immediately redirect this tab (no link)
+            
             html(f"""
             <script>
               window.top.location.href = "{auth_url}";
@@ -615,6 +615,7 @@ def render_auth_panel(cfg):
             st.stop()
         except Exception as e:
             st.error(f"Failed to start OAuth: {e}")
+            st.exception(e)  # optional: shows traceback for deeper debugging
 
     st.info("If you just completed sign‑in and returned here, the page will process your login automatically.")
 
@@ -623,17 +624,17 @@ def render_sidebar():
     st.sidebar.header("Utilities")
     if st.session_state.get("auth_required", True):
         if st.sidebar.button("Sign in"):
-            auth_url = start_web_oauth(Config.load().SCOPES)
-
-            # 🔁 Redirect current tab
-            from streamlit.components.v1 import html
-            html(f"""
-            <script>
-              window.top.location.href = "{auth_url}";
-            </script>
-            """, height=0)
-
-            st.stop()
+            try:
+                auth_url = start_web_oauth(Config.load().SCOPES)
+                from streamlit.components.v1 import html
+                html(f"""
+                <script>
+                  window.top.location.href = "{auth_url}";
+                </script>
+                """, height=0)
+                st.stop()
+            except Exception as e:
+                st.sidebar.error(f"Failed to start OAuth: {e}")
     else:
         st.sidebar.success("Signed in")
         if st.sidebar.button("Sign out"):
@@ -693,6 +694,8 @@ cfg = Config.load()
 # Handle OAuth redirect (if present in URL)
 handle_oauth_redirect_if_any(cfg)
 
+st.session_state.auth_required = (load_valid_token(cfg.SCOPES) is None)
+
 # Session state defaults
 if "incoming_selected_name" not in st.session_state:
     st.session_state.incoming_selected_name = None
@@ -700,9 +703,7 @@ if "incoming_uploaded_ok" not in st.session_state:
     st.session_state.incoming_uploaded_ok = False
 if "offer_log_download" not in st.session_state:
     st.session_state.offer_log_download = False
-if "auth_checked" not in st.session_state:
-    st.session_state.auth_required = (load_valid_token(cfg.SCOPES) is None)
-    st.session_state.auth_checked = True
+
 
 # Sidebar (always visible)
 with st.sidebar:
