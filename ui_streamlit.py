@@ -653,15 +653,22 @@ def render_auth_panel(cfg):
 
             # 🆕 Open Google OAuth in a NEW TAB (popup-style), like your old version.
             
-            html(f"""
-            <script>
-                // Open the OAuth tab (keep 'noopener' for safety)
-                window.open({json.dumps(auth_url)}, "_blank", "noopener");
+            html(
+                    """
+                    <script>
+                    try {
+                        // Open OAuth tab (keep noopener)
+                        window.open(%s, "_blank", "noopener");
 
-                // When the user comes back to this tab, refresh once to pick up token.json
-                document.addEventListener("visibilitychange", function() {try {if (!document.hidden) { location.reload(); }} catch(_) {}});
-            </script>
-            """, height=0)
+                        // Reload when user returns to this tab
+                        document.addEventListener("visibilitychange", function() {
+                        try { if (!document.hidden) { location.reload(); } } catch(_) {}
+                        });
+                    } catch(_) {}
+                    </script>
+                    """ % json.dumps(auth_url),
+                    height=0,
+                )
 
 
             # Optional: friendly message in the current tab
@@ -680,16 +687,22 @@ def render_sidebar():
             try:
                 auth_url = start_web_oauth(Config.load().SCOPES)
 
-                
-                html(f"""
-                <script>
-                    // Open the OAuth tab (keep 'noopener' for safety)
-                    window.open({json.dumps(auth_url)}, "_blank", "noopener");
+                html(
+                    """
+                    <script>
+                    try {
+                        // Open OAuth tab (keep noopener)
+                        window.open(%s, "_blank", "noopener");
 
-                    // When the user comes back to this tab, refresh once to pick up token.json
-                    document.addEventListener("visibilitychange", function() {try {if (!document.hidden) { location.reload(); }} catch(_) {}});
-                </script>
-                """, height=0)
+                        // Reload when user returns to this tab
+                        document.addEventListener("visibilitychange", function() {
+                        try { if (!document.hidden) { location.reload(); } } catch(_) {}
+                        });
+                    } catch(_) {}
+                    </script>
+                    """ % json.dumps(auth_url),
+                    height=0,
+                )
 
                 st.sidebar.info("A new tab was opened for Google sign‑in.")
                 st.stop()
