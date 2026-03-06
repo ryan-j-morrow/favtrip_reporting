@@ -6,4 +6,4 @@ httplib2
 requests
 python-dotenv
 streamlit
-openpxyl
+openpyxl
