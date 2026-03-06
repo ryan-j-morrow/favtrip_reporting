@@ -309,8 +309,10 @@ def render_run_form(cfg):
     if had_ok:
         run_form_wrapper_classes += " ft-run-green"
 
-    # OPEN the wrapper with real HTML (not &lt; &gt;)
+    
+    # OPEN the wrapper with real HTML (no entities)
     st.markdown(f'<div class="{run_form_wrapper_classes}">', unsafe_allow_html=True)
+
 
 
     with st.form("run_form"):
@@ -703,13 +705,18 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-/* Make only the primary button inside a .ft-run-green section look green */
-.ft-run-green .stButton > button[kind="primary"],
-.ft-run-green div[data-baseweb="button"] button[kind="primary"] {
+/* Make only buttons inside a .ft-run-green scope look green */
+.ft-run-green .stButton > button {
     background-color: #22c55e !important;  /* green */
     border-color: #16a34a !important;
     color: #ffffff !important;
 }
+/* Optional: dim disabled state a bit */
+.ft-run-green .stButton > button:disabled {
+    opacity: .6 !important;
+    cursor: not-allowed !important;
+}
+/* Utility: right-align containers where used */
 .ft-right-btn { display:flex; justify-content:flex-end; }
 </style>
 """, unsafe_allow_html=True)
