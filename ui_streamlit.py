@@ -664,6 +664,7 @@ def render_run_form(cfg):
                             st.session_state.incoming_selected_name = None
 
                             status.update(label="✅ Completed", state="complete")
+                            time.sleep(10)
                             _rerun()
 
     st.markdown('</div>', unsafe_allow_html=True)
