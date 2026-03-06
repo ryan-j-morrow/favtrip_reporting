@@ -270,6 +270,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# 4) CSS (make sure these are real <style> tags)
 st.markdown("""
 <style>
 :root{
@@ -279,24 +280,36 @@ st.markdown("""
   --ft-blue:  #1a73e8;
 }
 
-/* Optional: remove global “force blue” for all form submit buttons, or keep it,
-   but we’ll override it below with more specific selectors. */
-/* div[data-testid="stFormSubmitButton"] button { background: var(--ft-blue) !important; color:#fff !important; } */
-
-/* Shared scope so we can apply shared button text color */
-.ft-scope [data-testid="stFormSubmitButton"] button {
+/* Normalize */
+div[data-testid="stFormSubmitButton"] button {
   color: #fff !important;
   border: none !important;
 }
 
-/* Upload button by state */
-#ft-upload[data-state="none"]  [data-testid="stFormSubmitButton"] button { background: var(--ft-grey)  !important; }
-#ft-upload[data-state="need"]  [data-testid="stFormSubmitButton"] button { background: var(--ft-red)   !important; }
-#ft-upload[data-state="ok"]    [data-testid="stFormSubmitButton"] button { background: var(--ft-green) !important; }
+/* RUN (primary) by state */
+html[data-ft-run="grey"] [data-testid="baseButton-primaryFormSubmit"] {
+  background: var(--ft-grey) !important;
+}
+html[data-ft-run="blue"] [data-testid="baseButton-primaryFormSubmit"] {
+  background: var(--ft-blue) !important;
+}
 
-/* Run button by state */
-#ft-run[data-state="grey"]     [data-testid="stFormSubmitButton"] button { background: var(--ft-grey)  !important; }
-#ft-run[data-state="blue"]     [data-testid="stFormSubmitButton"] button { background: var(--ft-blue)  !important; }
+/* UPLOAD (secondary) by state */
+html[data-ft-upload="none"] [data-testid="baseButton-secondaryFormSubmit"] {
+  background: var(--ft-grey) !important;
+}
+html[data-ft-upload="need"] [data-testid="baseButton-secondaryFormSubmit"] {
+  background: var(--ft-red) !important;
+}
+html[data-ft-upload="ok"] [data-testid="baseButton-secondaryFormSubmit"] {
+  background: var(--ft-green) !important;
+}
+
+/* Hover/active polish */
+[data-testid="baseButton-primaryFormSubmit"]:hover,
+[data-testid="baseButton-secondaryFormSubmit"]:hover { filter: brightness(0.93); }
+[data-testid="baseButton-primaryFormSubmit"]:active,
+[data-testid="baseButton-secondaryFormSubmit"]:active { transform: translateY(1px); }
 </style>
 """, unsafe_allow_html=True)
 
@@ -524,217 +537,271 @@ if st.session_state.auth_required:
 if not st.session_state.auth_required:
     # ---- Run Form (Run button top-right) ----
     with st.form("run_form"):
-        # ---- Header text on left, reserve run-button space on right ----
-        tl, gap, col_run = st.columns([4, 1, 1])
-        with tl:
-            st.subheader("Run Options")
-            st.caption("Configure email behavior and report keys. Use **Advanced** for IDs/GIDs/timezone.")
+    # ---- Header text on left, reserve run-button space on right ----
+    tl, gap, col_run = st.columns([4, 1, 1])
+    with tl:
+        st.subheader("Run Options")
+        st.caption("Configure email behavior and report keys. Use **Advanced** for IDs/GIDs/timezone.")
 
-        # ===== Upload row ABOVE state computation =====
-        st.markdown('<div class="ft-upload-title">Upload Current Week Sales Report</div>', unsafe_allow_html=True)
-        up_col, gap2, upbtn_col = st.columns([4, 1, 1])
-        with up_col:
-            st.markdown('<div class="ft-upload-row">', unsafe_allow_html=True)
-            # 1) Define incoming_file BEFORE you compute states
-            incoming_file = st.file_uploader(
-                "Upload Current Week Sales Report",
-                type=["xlsx", "csv"],
-                key="incoming_upload",
-                help = "Please upload the current week's 'Live Items Report' from Modisoft as an XLSX or CSV file.",
-                label_visibility="collapsed",
-                accept_multiple_files=False,
-            )
-            st.markdown('</div>', unsafe_allow_html=True)
+    # ===== Upload row ABOVE state computation =====
+    st.markdown('<div class="ft-upload-title">Upload Current Week Sales Report</div>', unsafe_allow_html=True)
+    up_col, gap2, upbtn_col = st.columns([4, 1, 1])
+    with up_col:
+        st.markdown('<div class="ft-upload-row">', unsafe_allow_html=True)
+        # 1) Define incoming_file BEFORE you compute states
+        incoming_file = st.file_uploader(
+            "Upload Current Week Sales Report",
+            type=["xlsx", "csv"],
+            key="incoming_upload",
+            help="Please upload the current week's 'Live Items Report' from Modisoft as an XLSX or CSV file.",
+            label_visibility="collapsed",
+            accept_multiple_files=False,
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
 
-        # 2) Compute states NOW that incoming_file exists
-        file_selected = incoming_file is not None
-        if file_selected and st.session_state.incoming_selected_name != incoming_file.name:
-            st.session_state.incoming_selected_name = incoming_file.name
-            st.session_state.incoming_uploaded_ok = False
+    # 2) Compute states NOW that incoming_file exists
+    file_selected = incoming_file is not None
+    if file_selected and st.session_state.incoming_selected_name != incoming_file.name:
+        st.session_state.incoming_selected_name = incoming_file.name
+        st.session_state.incoming_uploaded_ok = False
 
-        if not file_selected:
-            upload_state = "none"  # grey
-            run_disabled = False
-            run_state = "blue"     # default blue
-        elif file_selected and not st.session_state.incoming_uploaded_ok:
-            upload_state = "need"  # red
-            run_disabled = True
-            run_state = "grey"
+    if not file_selected:
+        upload_state = "none"  # grey
+        run_disabled = False
+        run_state = "blue"     # default blue
+    elif file_selected and not st.session_state.incoming_uploaded_ok:
+        upload_state = "need"  # red
+        run_disabled = True
+        run_state = "grey"
+    else:
+        upload_state = "ok"    # green
+        run_disabled = False
+        run_state = "blue"
+
+    # ---- Publish state to <html> so CSS can dynamically color the buttons ----
+    # (Works even though these elements are not DOM parents of the buttons)
+    html(
+        f"""
+        <script>
+          document.documentElement.setAttribute('data-ft-upload', {json.dumps(upload_state)});
+          document.documentElement.setAttribute('data-ft-run', {json.dumps(run_state)});
+        </script>
+        """,
+        height=0,
+    )
+
+    # ---- Dynamic button CSS (targets PRIMARY/SECONDARY submit buttons) ----
+    # Safe to include here; remove your old #ft-run/#ft-upload wrapper rules.
+    st.markdown("""
+    <style>
+      /* Ensure text is readable and borders removed */
+      [data-testid="baseButton-primaryFormSubmit"],
+      [data-testid="baseButton-secondaryFormSubmit"] {
+        color: #fff !important;
+        border: none !important;
+      }
+
+      /* RUN (primary) by state */
+      html[data-ft-run="grey"] [data-testid="baseButton-primaryFormSubmit"] {
+        background: var(--ft-grey) !important;
+      }
+      html[data-ft-run="blue"] [data-testid="baseButton-primaryFormSubmit"] {
+        background: var(--ft-blue) !important;
+      }
+
+      /* UPLOAD (secondary) by state */
+      html[data-ft-upload="none"] [data-testid="baseButton-secondaryFormSubmit"] {
+        background: var(--ft-grey) !important;
+      }
+      html[data-ft-upload="need"] [data-testid="baseButton-secondaryFormSubmit"] {
+        background: var(--ft-red) !important;
+      }
+      html[data-ft-upload="ok"] [data-testid="baseButton-secondaryFormSubmit"] {
+        background: var(--ft-green) !important;
+      }
+
+      /* Hover/active polish */
+      [data-testid="baseButton-primaryFormSubmit"]:hover,
+      [data-testid="baseButton-secondaryFormSubmit"]:hover { filter: brightness(0.93); }
+      [data-testid="baseButton-primaryFormSubmit"]:active,
+      [data-testid="baseButton-secondaryFormSubmit"]:active { transform: translateY(1px); }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # 3) Render the RUN button (top-right). No wrapper needed; rely on html[data-ft-run]
+    with col_run:
+        submitted = st.form_submit_button(
+            "▶️ Run Pipeline",
+            use_container_width=True,
+            disabled=run_disabled,
+            type="primary",      # <— makes selector stable: [data-testid="baseButton-primaryFormSubmit"]
+            key="run_submit"
+        )
+
+    # 4) Render the UPLOAD button (right side of uploader row). No wrapper needed.
+    with upbtn_col:
+        upload_clicked = st.form_submit_button(
+            "⬆️ Upload Now",
+            use_container_width=True,
+            disabled=(not file_selected),
+            type="secondary",    # <— stable selector: [data-testid="baseButton-secondaryFormSubmit"]
+            key="upload_submit"
+        )
+
+    # --- Handle the upload action ---
+    if upload_clicked:
+        if not cfg.INCOMING_FOLDER_ID:
+            st.error("Incoming Folder ID is empty. Set it under **Advanced → Incoming Folder ID**.")
+        elif incoming_file is None:
+            st.warning("Choose a .xlsx or .csv file first.")
         else:
-            upload_state = "ok"    # green
-            run_disabled = False
-            run_state = "blue"
-
-        # 3) Render the RUN button (top-right) with a wrapper carrying the state
-        with col_run:
-            st.markdown(f'<div id="ft-run" class="ft-scope" data-state="{run_state}">', unsafe_allow_html=True)
-            submitted = st.form_submit_button("▶️ Run Pipeline", use_container_width=True, disabled=run_disabled)
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        # 4) Render the UPLOAD button (right side of uploader row), also wrapped with state
-        with upbtn_col:
-            st.markdown(f'<div id="ft-upload" class="ft-scope ft-align-right" data-state="{upload_state}">', unsafe_allow_html=True)
-            upload_clicked = st.form_submit_button("⬆️ Upload Now", use_container_width=True, disabled=(not file_selected))
-            st.markdown('</div>', unsafe_allow_html=True)
-
-
-        # --- Handle the upload action ---
-        if upload_clicked:
-            if not cfg.INCOMING_FOLDER_ID:
-                st.error("Incoming Folder ID is empty. Set it under **Advanced → Incoming Folder ID**.")
-            elif incoming_file is None:
-                st.warning("Choose a .xlsx or .csv file first.")
-            else:
-                try:
-                    # Build Drive service using your existing helpers
-                    drive = _get_drive_service_or_raise(cfg)  # uses load_valid_token(...) + services(...)
-                    # Convert to Google Sheet so 'find_latest_sheet' sees it
-                    media_mime = _infer_media_mime(incoming_file.name)
-                    base_name  = os.path.splitext(incoming_file.name)[0]
-                    nice_name  = f"{base_name} (uploaded via UI)"
-                    created = upload_to_drive(
-                        drive,
-                        data=incoming_file.getvalue(),
-                        name=nice_name,
-                        mime=media_mime,
-                        folder_id=cfg.INCOMING_FOLDER_ID,
-                        to_sheet=True,  # crucial for discovery by your pipeline
-                    )
-                    link = created.get("webViewLink", "")
-
-                    st.session_state.incoming_uploaded_ok = True  # mark success for color swap
-                    st.success("✅ Uploaded to Incoming as a Google Sheet.")
-                    if link:
-                        st.link_button("Open uploaded Sheet", link, use_container_width=True)
-                    st.caption("This will be treated as the latest incoming report on the next run.")
-                except Exception as e:
-                    st.error(f"Upload failed: {e}")
-
-        # --- Main options ---
-        # --- REPLACE your current recipients/keys/email-behavior sections with this ---
-
-        # ===== Recipients (compact two columns) =====
-        with st.container():
-            st.markdown("##### Recipients")
-            with st.container():
-                col1, col2 = st.columns([1, 1])
-                with col1:
-                    to = st.text_input(
-                        "To (comma)", value=",".join(cfg.TO_RECIPIENTS or []),
-                        help="Fallback recipients for Manager & Order emails."
-                    )
-                with col2:
-                    cc = st.text_input(
-                        "CC (comma)", value=",".join(cfg.CC_RECIPIENTS or []),
-                        help="Optional CC added to all emails."
-                    )
-
-        # ===== Report Keys (toggle + input aligned) =====
-        with st.container():
-            st.markdown("##### Report Keys")
-            with st.container():
-                colk1, colk2 = st.columns([0.45, 1.55])
-                with colk1:
-                    # Toggle reads better than checkbox for 'all vs selected'
-                    use_all = st.toggle(
-                        "Use all keys from CSV",
-                        value=cfg.USE_ALL_REPORT_KEYS,
-                        help="ON: process every key found. OFF: only the keys you list."
-                    )
-                with colk2:
-                    report_keys = st.text_input(
-                        "Keys to run (comma)",
-                        value=",".join(cfg.REPORT_KEY_RUN_LIST or []),
-                        help="Used when 'Use all keys' is OFF. Example: COFFEE,GROCERY"
-                    )
-
-        # ===== Email Behavior (two toggles in one row) =====
-        with st.container():
-            st.markdown("##### Email Behavior")
-            cole1, cole2, cole3 = st.columns([1, 1, 1])
-            with cole1:
-                include_full = st.toggle(
-                    "Attach FULL order in each email",
-                    value=cfg.INCLUDE_FULL_ORDER_IN_EACH_REPORT_KEY_EMAIL
+            try:
+                # Build Drive service using your existing helpers
+                drive = _get_drive_service_or_raise(cfg)  # uses load_valid_token(...) + services(...)
+                # Convert to Google Sheet so 'find_latest_sheet' sees it
+                media_mime = _infer_media_mime(incoming_file.name)
+                base_name  = os.path.splitext(incoming_file.name)[0]
+                nice_name  = f"{base_name} (uploaded via UI)"
+                created = upload_to_drive(
+                    drive,
+                    data=incoming_file.getvalue(),
+                    name=nice_name,
+                    mime=media_mime,
+                    folder_id=cfg.INCOMING_FOLDER_ID,
+                    to_sheet=True,  # crucial for discovery by your pipeline
                 )
-            with cole2:
-                send_full = st.toggle(
-                    "Send separate FULL order email",
-                    value=cfg.SEND_SEPARATE_FULL_ORDER_EMAIL
+                link = created.get("webViewLink", "")
+
+                st.session_state.incoming_uploaded_ok = True  # mark success for color swap
+                st.success("✅ Uploaded to Incoming as a Google Sheet.")
+                if link:
+                    st.link_button("Open uploaded Sheet", link, use_container_width=True)
+                st.caption("This will be treated as the latest incoming report on the next run.")
+
+                # IMPORTANT: rerun immediately so button colors/disabled states flip now
+                _rerun()
+            except Exception as e:
+                st.error(f"Upload failed: {e}")
+
+    # --- Main options ---
+
+    # ===== Recipients (compact two columns) =====
+    with st.container():
+        st.markdown("##### Recipients")
+        with st.container():
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                to = st.text_input(
+                    "To (comma)", value=",".join(cfg.TO_RECIPIENTS or []),
+                    help="Fallback recipients for Manager & Order emails."
                 )
-            with cole3:                
-                email_mgr = st.toggle(
-                    "Email Manager Report",
-                    value=getattr(cfg, "EMAIL_MANAGER_REPORT", True),
-                    help="When ON, the Manager Report email is sent. When OFF, it is skipped."
+            with col2:
+                cc = st.text_input(
+                    "CC (comma)", value=",".join(cfg.CC_RECIPIENTS or []),
+                    help="Optional CC added to all emails."
                 )
 
+    # ===== Report Keys (toggle + input aligned) =====
+    with st.container():
+        st.markdown("##### Report Keys")
+        with st.container():
+            colk1, colk2 = st.columns([0.45, 1.55])
+            with colk1:
+                use_all = st.toggle(
+                    "Use all keys from CSV",
+                    value=cfg.USE_ALL_REPORT_KEYS,
+                    help="ON: process every key found. OFF: only the keys you list."
+                )
+            with colk2:
+                report_keys = st.text_input(
+                    "Keys to run (comma)",
+                    value=",".join(cfg.REPORT_KEY_RUN_LIST or []),
+                    help="Used when 'Use all keys' is OFF. Example: COFFEE,GROCERY"
+                )
 
-        # ===== Put optional editors/switches in cards for light framing =====
-        st.markdown('<div class="ft-card">', unsafe_allow_html=True)
-        with st.expander("Per‑Report‑Key Recipients (optional)", expanded=False):
-            st.caption("Map **REPORT KEY (ALL CAPS)** → **Emails (comma)**.")
-            # existing rows construction remains the same...
-            rows = []
-            if cfg.REPORT_KEY_RECIPIENTS:
-                for k, v in cfg.REPORT_KEY_RECIPIENTS.items():
-                    rows.append({"REPORT KEY (ALL CAPS)": k, "Emails (comma)": ",".join(v or [])})
-            else:
-                rows = [{"REPORT KEY (ALL CAPS)": "", "Emails (comma)": ""}]
-            edited_rows = st.data_editor(
-                rows,
-                num_rows="dynamic",
-                use_container_width=True,
-                key="rk_editor",
+    # ===== Email Behavior (two toggles in one row) =====
+    with st.container():
+        st.markdown("##### Email Behavior")
+        cole1, cole2, cole3 = st.columns([1, 1, 1])
+        with cole1:
+            include_full = st.toggle(
+                "Attach FULL order in each email",
+                value=cfg.INCLUDE_FULL_ORDER_IN_EACH_REPORT_KEY_EMAIL
+            )
+        with cole2:
+            send_full = st.toggle(
+                "Send separate FULL order email",
+                value=cfg.SEND_SEPARATE_FULL_ORDER_EMAIL
+            )
+        with cole3:
+            email_mgr = st.toggle(
+                "Email Manager Report",
+                value=getattr(cfg, "EMAIL_MANAGER_REPORT", True),
+                help="When ON, the Manager Report email is sent. When OFF, it is skipped."
             )
 
-            # Preview + validation (from earlier step)
-            rk_issues, rk_preview, rk_map_preview = _analyze_rk_rows(edited_rows)
-            if rk_preview:
-                with st.expander("Row template preview"):
-                    st.code("\n".join(rk_preview), language="text")
-            if rk_issues:
-                st.warning("Per‑report‑key recipient issues:\n\n- " + "\n- ".join(rk_issues))
+    # ===== Put optional editors/switches in cards for light framing =====
+    st.markdown('<div class="ft-card">', unsafe_allow_html=True)
+    with st.expander("Per‑Report‑Key Recipients (optional)", expanded=False):
+        st.caption("Map **REPORT KEY (ALL CAPS)** → **Emails (comma)**.")
+        rows = []
+        if cfg.REPORT_KEY_RECIPIENTS:
+            for k, v in cfg.REPORT_KEY_RECIPIENTS.items():
+                rows.append({"REPORT KEY (ALL CAPS)": k, "Emails (comma)": ",".join(v or [])})
+        else:
+            rows = [{"REPORT KEY (ALL CAPS)": "", "Emails (comma)": ""}]
+        edited_rows = st.data_editor(
+            rows,
+            num_rows="dynamic",
+            use_container_width=True,
+            key="rk_editor",
+        )
 
-        st.markdown('</div>', unsafe_allow_html=True)
+        # Preview + validation
+        rk_issues, rk_preview, rk_map_preview = _analyze_rk_rows(edited_rows)
+        if rk_preview:
+            with st.expander("Row template preview"):
+                st.code("\n".join(rk_preview), language="text")
+        if rk_issues:
+            st.warning("Per‑report‑key recipient issues:\n\n- " + "\n- ".join(rk_issues))
+    st.markdown('</div>', unsafe_allow_html=True)
 
-        st.markdown('<div class="ft-card">', unsafe_allow_html=True)
-        with st.expander("Advanced (IDs, GIDs, Timezone, Redirect Port)", expanded=False):
-            st.markdown("##### Google Drive / Sheets IDs")
-            ga1, ga2 = st.columns([1, 1])
-            with ga1:
-                calc_id = st.text_input("Calculations Spreadsheet ID", value=cfg.CALC_SPREADSHEET_ID)
-                mgr_folder = st.text_input("Manager Report Folder ID", value=cfg.MANAGER_REPORT_FOLDER_ID)
-            with ga2:
-                incoming_id = st.text_input("Incoming Folder ID", value=cfg.INCOMING_FOLDER_ID)
-                order_folder = st.text_input("Order Report Folder ID", value=cfg.ORDER_REPORT_FOLDER_ID)
+    st.markdown('<div class="ft-card">', unsafe_allow_html=True)
+    with st.expander("Advanced (IDs, GIDs, Timezone, Redirect Port)", expanded=False):
+        st.markdown("##### Google Drive / Sheets IDs")
+        ga1, ga2 = st.columns([1, 1])
+        with ga1:
+            calc_id = st.text_input("Calculations Spreadsheet ID", value=cfg.CALC_SPREADSHEET_ID)
+            mgr_folder = st.text_input("Manager Report Folder ID", value=cfg.MANAGER_REPORT_FOLDER_ID)
+        with ga2:
+            incoming_id = st.text_input("Incoming Folder ID", value=cfg.INCOMING_FOLDER_ID)
+            order_folder = st.text_input("Order Report Folder ID", value=cfg.ORDER_REPORT_FOLDER_ID)
 
-            st.markdown("##### GIDs & Named Ranges")
-            gb1, gb2 = st.columns([1, 1])
-            with gb1:
-                gid_mgr = st.text_input("Manager Report gid", value=str(cfg.GID_MANAGER_PDF))
-                loc_sheet = st.text_input("Location Sheet Title", value=cfg.LOCATION_SHEET_TITLE)
-            with gb2:
-                gid_order = st.text_input("Order CSV gid", value=str(cfg.GID_ORDER_CSV))
-                loc_range = st.text_input("Location Named Range", value=cfg.LOCATION_NAMED_RANGE)
+        st.markdown("##### GIDs & Named Ranges")
+        gb1, gb2 = st.columns([1, 1])
+        with gb1:
+            gid_mgr = st.text_input("Manager Report gid", value=str(cfg.GID_MANAGER_PDF))
+            loc_sheet = st.text_input("Location Sheet Title", value=cfg.LOCATION_SHEET_TITLE)
+        with gb2:
+            gid_order = st.text_input("Order CSV gid", value=str(cfg.GID_ORDER_CSV))
+            loc_range = st.text_input("Location Named Range", value=cfg.LOCATION_NAMED_RANGE)
 
-            st.markdown("##### Time & OAuth")
-            gc1, gc2 = st.columns([1, 1])
-            with gc1:
-                tz = st.text_input("Timestamp Timezone", value=cfg.TIMESTAMP_TZ)
-                tfmt = st.text_input("Timestamp Format", value=cfg.TIMESTAMP_FMT)
-            with gc2:
-                raw_redirect_port = int(cfg.REDIRECT_PORT) if str(cfg.REDIRECT_PORT).isdigit() else 0
-                redirect_port = st.number_input(
-                    "Redirect Port (0 = auto)",
-                    min_value=0, max_value=65535,
-                    value=raw_redirect_port if raw_redirect_port in (0, *range(1024, 65536)) else 0,
-                    help="Use 0 to auto-pick a free port. Otherwise choose 1024–65535."
-                )
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("##### Time & OAuth")
+        gc1, gc2 = st.columns([1, 1])
+        with gc1:
+            tz = st.text_input("Timestamp Timezone", value=cfg.TIMESTAMP_TZ)
+            tfmt = st.text_input("Timestamp Format", value=cfg.TIMESTAMP_FMT)
+        with gc2:
+            raw_redirect_port = int(cfg.REDIRECT_PORT) if str(cfg.REDIRECT_PORT).isdigit() else 0
+            redirect_port = st.number_input(
+                "Redirect Port (0 = auto)",
+                min_value=0, max_value=65535,
+                value=raw_redirect_port if raw_redirect_port in (0, *range(1024, 65536)) else 0,
+                help="Use 0 to auto-pick a free port. Otherwise choose 1024–65535."
+            )
+    st.markdown('</div>', unsafe_allow_html=True)
 
-        save_drive_defaults = st.checkbox("Update defaults", value=False)
-
+    save_drive_defaults = st.checkbox("Update defaults", value=False)
     # ----------------------------
     # Submission handling
     # ----------------------------
