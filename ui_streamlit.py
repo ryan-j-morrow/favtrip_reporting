@@ -176,13 +176,30 @@ from favtrip.config_store import save_config_to_drive
 from favtrip.config import Config
 from favtrip.logger import StatusLogger
 from favtrip.pipeline import run_pipeline
-from favtrip.google_client import (
-    start_oauth,
-    finish_oauth,
-    load_valid_token,
-    clear_token,
-    services,
-)
+from favtrip.google_client import (start_oauth, finish_oauth, load_valid_token, clear_token, services)
+from favtrip.drive_utils import upload_to_drive
+
+
+
+# --- Helpers for the upload control ---
+
+def _infer_media_mime(name: str) -> str:
+    n = (name or "").lower()
+    if n.endswith(".csv"):
+        return "text/csv"
+    if n.endswith(".xlsx"):
+        return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    # Fallback (Drive will still try, but we only allow csv/xlsx in the UI)
+    return "application/octet-stream"
+
+def _get_drive_service_or_raise(cfg):
+    creds = load_valid_token(cfg.SCOPES)
+    if not creds:
+        raise RuntimeError("Google authorization required. Please sign in first.")
+    _sheets, drive, _gmail = services(creds, cfg.HTTP_TIMEOUT_SECONDS)
+    return drive
+
+
 
 def _rerun():
     # Works on Streamlit >= 1.27 (st.rerun) and older (experimental_rerun)
@@ -452,21 +469,64 @@ if not st.session_state.auth_required:
     # ---- Run Form (Run button top-right) ----
     with st.form("run_form"):
         
-        header_left, header_right = st.columns([1, 0.32])
+        tl, col_upload, col_run = st.columns([4, 1, 1])
 
-        with header_left:
+        with tl:
             st.subheader("Run Options")
             st.caption("Configure email behavior and report keys. Use **Advanced** for IDs/GIDs/timezone.")
 
-        with header_right:
-            st.markdown('<div class="ft-runwrap">', unsafe_allow_html=True)
-            submitted = st.form_submit_button(
-                "Run Pipeline",  # NO ICON
-                help="Start the pipeline"
+        with col_upload:
+            # Compact uploader shown in the header row
+            incoming_file = st.file_uploader(
+                "Upload incoming (xlsx/csv)",
+                type=["xlsx", "csv"],
+                key="incoming_upload",
+                label_visibility="collapsed",
             )
-            st.markdown('</div>', unsafe_allow_html=True)
+            upload_clicked = st.form_submit_button("⬆️ Upload Current Week Sales", help="Please upload the 'Live Sales' report from Modisoft as a XLSX or CSV file" , use_container_width=True)
+
+        with col_run:
+            submitted = st.form_submit_button("▶️ Run Pipeline", use_container_width=True)
 
 
+        # --- Handle "Upload Incoming" within this form ---
+        if upload_clicked:
+            if not cfg.INCOMING_FOLDER_ID:
+                st.error("Incoming Folder ID is empty. Set it under **Advanced** → **Incoming Folder ID**.")
+            elif not incoming_file:
+                st.warning("Choose a .xlsx or .csv file first.")
+            else:
+                try:
+                    drive = _get_drive_service_or_raise(cfg)
+
+                    # Prepare metadata
+                    media_mime = _infer_media_mime(incoming_file.name)
+                    # Name for the converted Google Sheet (extension not needed)
+                    # Keeping the original base name helps with traceability
+                    base_name = os.path.splitext(incoming_file.name)[0]
+                    nice_name = f"{base_name} (uploaded via UI)"
+
+                    # Read bytes and upload with conversion to Google Sheets
+                    data_bytes = incoming_file.getvalue()
+                    created = upload_to_drive(
+                        drive,
+                        data=data_bytes,
+                        name=nice_name,
+                        mime=media_mime,
+                        folder_id=cfg.INCOMING_FOLDER_ID,
+                        to_sheet=True,  # <-- crucial: ensures Google Sheet so it is discoverable
+                    )
+
+                    link = created.get("webViewLink", "")
+                    st.success("✅ Uploaded to Incoming as a Google Sheet.")
+                    if link:
+                        st.link_button("Open uploaded Sheet", link, use_container_width=True)
+
+                    st.caption(
+                        "This will be treated as the latest incoming report on the next run."
+                    )
+                except Exception as e:
+                    st.error(f"Upload failed: {e}")
 
         # --- Main options ---
         # --- REPLACE your current recipients/keys/email-behavior sections with this ---
