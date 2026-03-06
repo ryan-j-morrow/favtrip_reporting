@@ -190,7 +190,7 @@ def start_web_oauth(scopes):
 def finish_web_oauth(code: str, state_b64: str, scopes):
     """
     Recreate a Flow with the same redirect_uri and exchange code + code_verifier for tokens.
-    (Side-effect free: does not inject HTML or attempt to postMessage/close tabs.)
+    (No UI side effects here.)
     """
     cfg = json.loads(st.secrets["GOOGLE_CREDENTIALS"])
     state_obj = _parse_state(state_b64)
@@ -565,20 +565,6 @@ def render_run_form(cfg):
     # 🔚 CLOSE the run card wrapper (ALWAYS close after the form block)
 
 
-
-
-def render_sidebar():
-    st.header("Utilities")
-    if st.button("Google Sign Out", type="secondary", use_container_width=True):
-        clear_token()
-        for key in ["auth_required", "oauth_url", "auth_checked"]:
-            if key in st.session_state:
-                del st.session_state[key]
-        try:
-            st.rerun()
-        except AttributeError:
-            st.experimental_rerun()
-
 # =========================
 # App Entrypoint
 # =========================
@@ -603,17 +589,30 @@ st.set_page_config(
 
 cfg = Config.load()
 
-# Ensure session auth gate is established only once
-if "auth_checked" not in st.session_state:
-    st.session_state.auth_required = (load_valid_token(cfg.SCOPES) is None)
-    st.session_state.oauth_url = None
-    st.session_state.auth_checked = True
+cfg = Config.load()
 
-# Keep this up to date if a token just got created/refreshed
-if load_valid_token(cfg.SCOPES):
-    cfg = Config.load()
+# --- Finish OAuth inline when redirect comes back (this is in the NEW TAB) ---
+params = st.query_params
+if "code" in params and "state" in params:
+    try:
+        finish_web_oauth(params["code"], params["state"], cfg.SCOPES)
+        # Token is saved locally in this new tab's app process
+        st.success("✅ Google authentication complete.")
 
+        # Remove code/state from URL
+        st.query_params.clear()
+
+        # No messaging back to opener and NO window.close().
+        # This tab becomes the main app; just rerun to flip UI.
+        st.toast("Signed in. Loading the app…")
+        st.rerun()
+    except Exception as e:
+        st.error(f"OAuth error: {e}")
+
+# If a valid token now exists (in this tab), reload cfg (Drive overlays, etc.)
 st.session_state.auth_required = (load_valid_token(cfg.SCOPES) is None)
+if not st.session_state.auth_required:
+    cfg = Config.load()
 
 # Session state defaults
 if "incoming_selected_name" not in st.session_state:
@@ -626,7 +625,17 @@ if "offer_log_download" not in st.session_state:
 
 # Sidebar (always visible)
 with st.sidebar:
-    render_sidebar()
+    st.header("Utilities")
+
+    if st.button("Google Sign Out", type="secondary", use_container_width=True):
+        clear_token()
+        for key in ["auth_required", "oauth_flow", "oauth_url", "auth_checked"]:
+            if key in st.session_state:
+                del st.session_state[key]
+        try:
+            st.rerun()
+        except AttributeError:
+            st.experimental_rerun()
 
 # Auth gate
 if st.session_state.auth_required:
@@ -646,11 +655,9 @@ if st.session_state.auth_required:
             if clicked:
                 try:
                     auth_url = start_web_oauth(cfg.SCOPES)
-
-                    # Remove the button immediately
                     sign_in_ph.empty()
 
-                    # Show the same friendly 'signing you in...' message
+                    # Friendly message in this (original) tab
                     st.markdown(
                         """
                         <div style="
@@ -661,7 +668,7 @@ if st.session_state.auth_required:
                             <h2 style="margin-bottom:0.5rem;">You're being signed in…</h2>
                             <p style="font-size:1.05rem;opacity:.9;">
                             A new browser tab was opened for Google sign‑in.<br/>
-                            <strong>After it completes, you may close this tab.</strong>
+                            <strong>After it completes, continue in that tab.</strong>
                             </p>
                         </div>
                         </div>
@@ -669,7 +676,7 @@ if st.session_state.auth_required:
                         unsafe_allow_html=True,
                     )
 
-                    # Refresh this tab when the user returns focus
+                    # Optional: refresh this tab when user returns (not required)
                     html(
                         """
                         <script>
@@ -681,7 +688,7 @@ if st.session_state.auth_required:
                         height=0,
                     )
 
-                    # Open Google auth in a NEW tab (keep this tab on the message)
+                    # Open Google auth in a NEW tab (this will ultimately become the main app)
                     html(
                         f"""
                         <script>
@@ -691,14 +698,14 @@ if st.session_state.auth_required:
                         height=0,
                     )
 
-                    st.stop()  # keep the message visible
+                    st.stop()
                 except Exception as e:
                     st.error(f"Failed to start OAuth: {e}")
 
             with st.expander("Having trouble?", expanded=False):
                 st.write(
                     "- The Google authorization page opens in a **new browser tab**.\n"
-                    "- After completing consent, **close this tab** and use the new tab.\n"
+                    "- After completing consent, the **new tab** will load the app.\n"
                     "- If you renamed your Streamlit app or URL, ensure the Google OAuth "
                     "Authorized redirect URI matches exactly (including trailing slash)."
                 )
