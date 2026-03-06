@@ -316,7 +316,9 @@ def render_run_form(cfg):
             st.caption("Configure email behavior and report keys. Use **Advanced** for IDs/GIDs/timezone.")
 
         # Gate: require successful upload only if a new file is currently selected but not uploaded
-        if not file_selected:
+        if run_disabled == False:
+            pass
+        elif not file_selected:
             run_disabled = True
         elif file_selected and not st.session_state.get("incoming_uploaded_ok", False):
             run_disabled = True
