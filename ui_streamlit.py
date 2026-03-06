@@ -329,74 +329,73 @@ def render_auth_panel(cfg):
             )
 
 
-def run_pipeline_with_status(cfg, logger: StatusLogger):
-    result_holder = {"value": None, "error": None}
-
-    def _runner():
-        try:
-            result_holder["value"] = run_pipeline(cfg, logger=logger)
-        except BaseException as e:
-            result_holder["error"] = e
-
-    t0 = time.perf_counter()
-    th = threading.Thread(target=_runner, daemon=True)
-    th.start()
-
-    with st.status("Running pipeline…", expanded=True) as status:
-        timer_ph = st.empty()
-        lastlog_ph = st.empty()
-        while th.is_alive():
-            elapsed = int(time.perf_counter() - t0)
-            timer_ph.markdown(f"**Elapsed:** `{elapsed//3600:02d}:{(elapsed%3600)//60:02d}:{elapsed%60:02d}`")
-            lastlog_ph.markdown(f"**Last:** {logger.last_line()}")
-            time.sleep(0.5)
-
-        th.join()
-        elapsed = int(time.perf_counter() - t0)
-        timer_ph.markdown(f"**Elapsed:** `{elapsed//3600:02d}:{(elapsed%3600)//60:02d}:{elapsed%60:02d}`")
-        lastlog_ph.markdown(f"**Last:** {logger.last_line()}")
-
-        if result_holder["error"]:
-            st.error(f"Run failed: {result_holder['error']}")
-            try:
-                st.exception(result_holder["error"])
-            except Exception:
-                pass
-            status.update(label="❌ Failed", state="error")
-            return
-
-        result = result_holder["value"]
-        if result is None:
-            st.error("Run finished without returning a result. Check logs and inputs (IDs, Drive access).")
-            status.update(label="⚠️ No result", state="error")
-            return
-
-        st.write("### Outputs")
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Location", result.location)
-        col2.metric("Timestamp", result.timestamp)
-        mm = result.elapsed_seconds
-        col3.metric("Elapsed", f"{mm//3600:02d}:{(mm%3600)//60:02d}:{mm%60:02d}")
-
-        if getattr(result, "manager_pdf_link", None):
-            st.success(f"Manager PDF: {result.manager_pdf_link}")
-        if getattr(result, "full_order_link", None):
-            st.success(f"Full Order Sheet: {result.full_order_link}")
-
-        if st.session_state.get("offer_log_download") and os.path.exists("last_run.log"):
-            with open("last_run.log", "rb") as f:
-                st.download_button(
-                    "⬇️ Download full log (last_run.log)",
-                    f,
-                    file_name=f"last_run_{result.timestamp}.log",
-                    mime="text/plain",
-                    use_container_width=True
-                )
-
-        status.update(label="✅ Completed", state="complete")
-
-
 def render_run_form(cfg):
+    # ---------------------------
+    # Upload section (OUTSIDE form)
+    # ---------------------------
+    st.markdown("**Upload Current Week Sales Report**")
+    up_col, _, upbtn_col = st.columns([4, 1, 1])
+
+    with up_col:
+        incoming_file = st.file_uploader(
+            "Upload Current Week Sales Report",
+            type=["xlsx", "csv"],
+            key="incoming_upload",
+            help="Please upload the current week's 'Live Items Report' from Modisoft as an XLSX or CSV file.",
+            label_visibility="collapsed",
+            accept_multiple_files=False,
+        )
+
+    # Track selection to manage gating (must click Upload Now successfully before Run)
+    file_selected = incoming_file is not None
+    if file_selected and st.session_state.get("incoming_selected_name") != incoming_file.name:
+        st.session_state.incoming_selected_name = incoming_file.name
+        st.session_state.incoming_uploaded_ok = False
+
+    with upbtn_col:
+        # IMPORTANT: this is a normal button, not a form submit button
+        upload_clicked = st.button(
+            "⬆️ Upload Now",
+            use_container_width=True,
+            disabled=(not file_selected),
+            type="secondary",
+            key="upload_submit",
+        )
+
+    # --- Handle the upload action immediately (since it's outside a form) ---
+    if upload_clicked:
+        if not cfg.INCOMING_FOLDER_ID:
+            st.error("Incoming Folder ID is empty. Set it under **Advanced → Incoming Folder ID**.")
+        elif incoming_file is None:
+            st.warning("Choose a .xlsx or .csv file first.")
+        else:
+            try:
+                drive = _get_drive_service_or_raise(cfg)
+                media_mime = _infer_media_mime(incoming_file.name)
+                base_name = os.path.splitext(incoming_file.name)[0]
+                nice_name = f"{base_name} (uploaded via UI)"
+                created = upload_to_drive(
+                    drive,
+                    data=incoming_file.getvalue(),
+                    name=nice_name,
+                    mime=media_mime,
+                    folder_id=cfg.INCOMING_FOLDER_ID,
+                    to_sheet=True,
+                )
+                link = created.get("webViewLink", "")
+
+                st.session_state.incoming_uploaded_ok = True
+                st.success("✅ Uploaded to Incoming as a Google Sheet.")
+                if link:
+                    st.link_button("Open uploaded Sheet", link, use_container_width=True)
+                st.caption("This will be treated as the latest incoming report on the next run.")
+                _rerun()  # refresh UI so Run button gating updates
+            except Exception as e:
+                st.error(f"Upload failed: {e}")
+
+    # ---------------------------
+    # Run form (ONLY run options + submit)
+    # ---------------------------
     with st.form("run_form"):
         # Header row
         tl, _, col_run = st.columns([4, 1, 1])
@@ -404,30 +403,11 @@ def render_run_form(cfg):
             st.subheader("Run Options")
             st.caption("Configure email behavior and report keys. Use **Advanced** for IDs/GIDs/timezone.")
 
-        # Upload row
-        st.markdown("**Upload Current Week Sales Report**")
-        up_col, _, upbtn_col = st.columns([4, 1, 1])
-        with up_col:
-            incoming_file = st.file_uploader(
-                "Upload Current Week Sales Report",
-                type=["xlsx", "csv"],
-                key="incoming_upload",
-                help="Please upload the current week's 'Live Items Report' from Modisoft as an XLSX or CSV file.",
-                label_visibility="collapsed",
-                accept_multiple_files=False,
-            )
-
-        # Track selection to manage gating (must click Upload Now successfully before Run)
-        file_selected = incoming_file is not None
-        if file_selected and st.session_state.get("incoming_selected_name") != incoming_file.name:
-            st.session_state.incoming_selected_name = incoming_file.name
-            st.session_state.incoming_uploaded_ok = False
-
-        # Gate: require successful upload before running
+        # Gate: require successful upload only if a new file is currently selected but not uploaded
         if not file_selected:
-            run_disabled = False     # allow runs without a new upload
+            run_disabled = False           # allow runs without selecting a new upload
         elif file_selected and not st.session_state.get("incoming_uploaded_ok", False):
-            run_disabled = True
+            run_disabled = True            # a new file is selected but not uploaded yet
         else:
             run_disabled = False
 
@@ -440,47 +420,6 @@ def render_run_form(cfg):
                 type="primary",
                 key="run_submit"
             )
-
-        # Upload button (next to uploader)
-        with upbtn_col:
-            upload_clicked = st.form_submit_button(
-                "⬆️ Upload Now",
-                use_container_width=True,
-                disabled=(not file_selected),
-                type="secondary",
-                key="upload_submit"
-            )
-
-        # --- Handle the upload action ---
-        if upload_clicked:
-            if not cfg.INCOMING_FOLDER_ID:
-                st.error("Incoming Folder ID is empty. Set it under **Advanced → Incoming Folder ID**.")
-            elif incoming_file is None:
-                st.warning("Choose a .xlsx or .csv file first.")
-            else:
-                try:
-                    drive = _get_drive_service_or_raise(cfg)
-                    media_mime = _infer_media_mime(incoming_file.name)
-                    base_name = os.path.splitext(incoming_file.name)[0]
-                    nice_name = f"{base_name} (uploaded via UI)"
-                    created = upload_to_drive(
-                        drive,
-                        data=incoming_file.getvalue(),
-                        name=nice_name,
-                        mime=media_mime,
-                        folder_id=cfg.INCOMING_FOLDER_ID,
-                        to_sheet=True,
-                    )
-                    link = created.get("webViewLink", "")
-
-                    st.session_state.incoming_uploaded_ok = True
-                    st.success("✅ Uploaded to Incoming as a Google Sheet.")
-                    if link:
-                        st.link_button("Open uploaded Sheet", link, use_container_width=True)
-                    st.caption("This will be treated as the latest incoming report on the next run.")
-                    _rerun()
-                except Exception as e:
-                    st.error(f"Upload failed: {e}")
 
         # ----- Main options -----
 
@@ -711,8 +650,7 @@ def render_run_form(cfg):
 
             # Run
             logger = StatusLogger(print_to_console=True, file_path="last_run.log", overwrite=True)
-            run_pipeline_with_status(cfg, logger)
-
+            run_pipeline(cfg, logger)
 
 # =========================
 # App Entrypoint
