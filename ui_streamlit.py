@@ -270,7 +270,35 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+st.markdown("""
+<style>
+/* --- Color palette --- */
+:root{
+  --ft-grey:  #9aa0a6;
+  --ft-red:   #d93025;
+  --ft-green: #188038;
+}
 
+/* Upload button color by state: the marker div sits immediately before stButton's wrapper */
+.ft-up-grey + div button  { background: var(--ft-grey)  !important; color: #fff !important; border-color: var(--ft-grey)  !important; }
+.ft-up-red  + div button  { background: var(--ft-red)   !important; color: #fff !important; border-color: var(--ft-red)   !important; }
+.ft-up-green+ div button  { background: var(--ft-green) !important; color: #fff !important; border-color: var(--ft-green) !important; }
+
+/* Run button forced-grey when needed */
+.ft-run-grey + div button { background: var(--ft-grey) !important; color: #fff !important; border-color: var(--ft-grey) !important; }
+
+/* Keep the one-line row tight */
+.ft-upload-row { margin-top: 0.25rem; margin-bottom: 0.25rem; }
+.ft-upload-row .stFileUploader { padding-top: 0; padding-bottom: 0; margin-top: 0; margin-bottom: 0; }
+.ft-upload-title { margin: 0 0 0.25rem 0; font-size: 0.9rem; font-weight: 600; opacity: 0.8; }
+
+/* Right-align helper for the upload button cell */
+.ft-align-right > div { display: flex; justify-content: flex-end; }
+
+/* Ensure disabled look is consistent */
+.ft-disabled { opacity: 0.6; pointer-events: none; }
+</style>
+""", unsafe_allow_html=True)
 
 
 # --- END CSS ---
@@ -279,6 +307,15 @@ st.markdown("""
 st.title("🧾 FavTrip Reporting Pipeline")
 
 cfg = Config.load()
+
+
+# --- Upload state flags ---
+if "incoming_selected_name" not in st.session_state:
+    st.session_state.incoming_selected_name = None
+
+if "incoming_uploaded_ok" not in st.session_state:
+    # True only after a successful upload of the currently selected file
+    st.session_state.incoming_uploaded_ok = False
 
 #Old Config Diagonistics
 def hide():
@@ -496,13 +533,16 @@ if not st.session_state.auth_required:
             st.caption("Configure email behavior and report keys. Use **Advanced** for IDs/GIDs/timezone.")
 
         with col_run:
-            submitted = st.form_submit_button("▶️ Run Pipeline", use_container_width=True)
+            run_marker = getattr(st.session_state, "ft_run_marker_html", "")
+                if run_marker:
+                    st.markdown(run_marker, unsafe_allow_html=True)
+                submitted = st.form_submit_button("▶️ Run Pipeline", use_container_width=True, disabled=getattr(st.session_state, "ft_run_disabled", False))
+
 
         # ===== Upload row ABOVE Recipients =====
         st.markdown('<div class="ft-upload-title">Upload Current Week Sales Report</div>', unsafe_allow_html=True)
 
-        # Use widths [4, 1, 1] so the rightmost column aligns with the Run button (header used [4, 1])
-        up_col, status_col, upbtn_col = st.columns([4, 1, 1])
+        up_col, gap2, upbtn_col = st.columns([4, 1, 1])
 
         with up_col:
             st.markdown('<div class="ft-upload-row">', unsafe_allow_html=True)
@@ -515,17 +555,46 @@ if not st.session_state.auth_required:
             )
             st.markdown('</div>', unsafe_allow_html=True)
 
-        with status_col:
-            # Show filename & size on one compact line when a file is selected
-            if incoming_file is not None:
-                size_mb = len(incoming_file.getvalue()) / (1024 * 1024)
-                st.caption(f"📄 {incoming_file.name} · {size_mb:.1f} MB")
-            else:
-                st.caption("No file chosen")
+        # --- Determine state (none selected / selected-not-uploaded / uploaded) ---
+        file_selected = incoming_file is not None
+        new_selection = False
+        if file_selected:
+            # If user picked a different file than last time, reset 'uploaded_ok'
+            if st.session_state.incoming_selected_name != incoming_file.name:
+                st.session_state.incoming_selected_name = incoming_file.name
+                st.session_state.incoming_uploaded_ok = False
+                new_selection = True
+
+        # --- Decide button colors & Run button behavior via 'marker' divs ---
+        # Upload button marker (immediately before the button)
+        if not file_selected:
+            up_marker_html = '<div class="ft-up-grey"></div>'
+            run_marker_html = ""                # keep default blue for Run
+            run_disabled = False
+        elif file_selected and not st.session_state.incoming_uploaded_ok:
+            up_marker_html = '<div class="ft-up-red"></div>'
+            run_marker_html = '<div class="ft-run-grey"></div>'  # paint Run grey while unuploaded
+            run_disabled = True                                 # also disable Run
+        else:
+            # file selected AND uploaded_ok
+            up_marker_html = '<div class="ft-up-green"></div>'
+            run_marker_html = ""                # back to default primary (blue)
+            run_disabled = False
+
+        # Push the Run-button decisions to session so header can read them
+        st.session_state.ft_run_marker_html = run_marker_html
+        st.session_state.ft_run_disabled = run_disabled
 
         with upbtn_col:
             st.markdown('<div class="ft-align-right">', unsafe_allow_html=True)
-            upload_clicked = st.form_submit_button("⬆️ Upload Now", use_container_width=True)
+            # Place the upload-state marker right before the Streamlit button
+            st.markdown(up_marker_html, unsafe_allow_html=True)
+
+            upload_clicked = st.form_submit_button(
+                "⬆️ Upload Now",
+                use_container_width=True,
+                disabled=(not file_selected)
+            )
             st.markdown('</div>', unsafe_allow_html=True)
 
         # --- Handle the upload action ---
@@ -536,26 +605,29 @@ if not st.session_state.auth_required:
                 st.warning("Choose a .xlsx or .csv file first.")
             else:
                 try:
-                    drive = _get_drive_service_or_raise(cfg)
+                    # Build Drive service using your existing helpers
+                    drive = _get_drive_service_or_raise(cfg)  # uses load_valid_token(...) + services(...)
+                    # Convert to Google Sheet so 'find_latest_sheet' sees it
                     media_mime = _infer_media_mime(incoming_file.name)
-                    base_name = os.path.splitext(incoming_file.name)[0]
-                    nice_name = f"{base_name} (uploaded via UI)"
+                    base_name  = os.path.splitext(incoming_file.name)[0]
+                    nice_name  = f"{base_name} (uploaded via UI)"
                     created = upload_to_drive(
                         drive,
                         data=incoming_file.getvalue(),
                         name=nice_name,
                         mime=media_mime,
                         folder_id=cfg.INCOMING_FOLDER_ID,
-                        to_sheet=True,  # convert so find_latest_sheet sees it
+                        to_sheet=True,  # crucial for discovery by your pipeline
                     )
                     link = created.get("webViewLink", "")
+
+                    st.session_state.incoming_uploaded_ok = True  # mark success for color swap
                     st.success("✅ Uploaded to Incoming as a Google Sheet.")
                     if link:
                         st.link_button("Open uploaded Sheet", link, use_container_width=True)
                     st.caption("This will be treated as the latest incoming report on the next run.")
                 except Exception as e:
                     st.error(f"Upload failed: {e}")
-        
 
         # --- Main options ---
         # --- REPLACE your current recipients/keys/email-behavior sections with this ---
