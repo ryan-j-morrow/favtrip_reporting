@@ -331,6 +331,18 @@ def render_auth_panel(cfg):
 
 def render_run_form(cfg):
     # ---------------------------
+    # Initialize state
+    # ---------------------------
+    if "incoming_uploader_version" not in st.session_state:
+        st.session_state.incoming_uploader_version = 0
+    if "incoming_selected_name" not in st.session_state:
+        st.session_state.incoming_selected_name = None
+    if "incoming_uploaded_ok" not in st.session_state:
+        st.session_state.incoming_uploaded_ok = False
+
+    uploader_key = f"incoming_upload_v{st.session_state.incoming_uploader_version}"
+
+    # ---------------------------
     # Upload section (OUTSIDE form)
     # ---------------------------
     st.markdown("**Upload Current Week Sales Report**")
@@ -340,7 +352,7 @@ def render_run_form(cfg):
         incoming_file = st.file_uploader(
             "Upload Current Week Sales Report",
             type=["xlsx", "csv"],
-            key="incoming_upload",
+            key=uploader_key,  # <- versioned key so we can "reset" after success
             help="Please upload the current week's 'Live Items Report' from Modisoft as an XLSX or CSV file.",
             label_visibility="collapsed",
             accept_multiple_files=False,
@@ -353,7 +365,7 @@ def render_run_form(cfg):
         st.session_state.incoming_uploaded_ok = False
 
     with upbtn_col:
-        # IMPORTANT: this is a normal button, not a form submit button
+        # Normal button (not a form submit) so it acts immediately
         upload_clicked = st.button(
             "⬆️ Upload Now",
             use_container_width=True,
@@ -387,9 +399,9 @@ def render_run_form(cfg):
                 # Mark upload success
                 st.session_state.incoming_uploaded_ok = True
 
-                # ✅ Clear/reset the uploader selection
-                st.session_state["incoming_upload"] = None
-                st.session_state["incoming_selected_name"] = None
+                # ✅ Reset uploader by bumping its version so it gets a NEW key next run
+                st.session_state.incoming_uploader_version += 1
+                st.session_state.incoming_selected_name = None
 
                 st.success("✅ Uploaded to Incoming as a Google Sheet.")
                 if link:
@@ -400,6 +412,9 @@ def render_run_form(cfg):
                 _rerun()
             except Exception as e:
                 st.error(f"Upload failed: {e}")
+
+    # After a rerun (or if no new file selected), recompute selection moment
+    file_selected = incoming_file is not None
 
     # ---------------------------
     # Run form (ONLY run options + submit)
@@ -424,9 +439,9 @@ def render_run_form(cfg):
             st.markdown(
                 """
                 <style>
-                  /* Color the submit button (within the form) green when upload is OK */
+                  /* Color only the submit button inside this form when upload is OK */
                   div[data-testid="stFormSubmitButton"] button {
-                      background-color: #188038 !important; /* Google green */
+                      background-color: #188038 !important; /* green */
                       color: #fff !important;
                   }
                   div[data-testid="stFormSubmitButton"] button:hover {
@@ -612,7 +627,6 @@ def render_run_form(cfg):
                     icon="⚠️"
                 )
 
-            # Surface per-key table issues detected earlier
             if 'rk_issues' in locals() and rk_issues:
                 st.warning(
                     "Per‑report‑key recipient issues detected above. These may prevent emails from sending correctly:\n\n- "
@@ -649,14 +663,12 @@ def render_run_form(cfg):
                             "SEND_SEPARATE_FULL_ORDER_EMAIL": cfg.SEND_SEPARATE_FULL_ORDER_EMAIL,
                             "EMAIL_MANAGER_REPORT": cfg.EMAIL_MANAGER_REPORT,
                         }
-
                         CONFIG_FILE_ID = (st.secrets.get("CONFIG_FILE_ID", "") or "").strip()
                         new_id = save_config_to_drive(
                             drive,
                             drive_defaults,
                             file_id=CONFIG_FILE_ID or None,
                         )
-
                         st.success(f"Saved defaults to Drive config (file id: {new_id}).")
                         if not CONFIG_FILE_ID:
                             st.info(
